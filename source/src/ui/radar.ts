@@ -4,7 +4,15 @@
 import type { Aircraft, Airport, Fix, SimState } from '../engine/index.js';
 import { HOLD_LEG_SEC, MIN_LATERAL_NM, findFix, findRunway, headingVector } from '../engine/index.js';
 
-export const COLORS = {
+export type Palette = Record<
+  | 'outside' | 'scope' | 'boundary' | 'grid' | 'runway' | 'runwayIdle' | 'centreline' | 'fix' | 'exit' | 'blip'
+  | 'dataBlock' | 'departure' | 'cleared' | 'selected' | 'conflict' | 'warning' | 'trail' | 'scale'
+  | 'labelBack' | 'labelBackDim',
+  string
+>;
+
+/** Live palette; theme.ts swaps its values in place (see applyTheme). */
+export const COLORS: Palette = {
   outside: '#0F191F',
   scope: '#17242C',
   boundary: '#3A5262',
@@ -23,7 +31,13 @@ export const COLORS = {
   warning: '#FF9F1C',
   trail: '#6F8A99',
   scale: '#7F98A6',
-} as const;
+  labelBack: 'rgba(15, 25, 31, 0.85)',
+  labelBackDim: 'rgba(23, 36, 44, 0.7)',
+};
+
+export function setRadarPalette(p: Palette): void {
+  Object.assign(COLORS, p);
+}
 
 const FONT = '"JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace';
 const MARGIN_PX = 14;
@@ -753,7 +767,7 @@ export class Radar {
       }
     }
     // A dark backing keeps the block readable over runways, fixes and other traffic.
-    ctx.fillStyle = selected ? 'rgba(15, 25, 31, 0.85)' : 'rgba(23, 36, 44, 0.7)';
+    ctx.fillStyle = selected ? COLORS.labelBack : COLORS.labelBackDim;
     ctx.fillRect(rx - 3, ry - 1, bw + 6, bh + 3);
     ctx.fillStyle = color;
     lines.forEach((l, i) => ctx.fillText(l, rx, ry + fs - 1 + i * lh));

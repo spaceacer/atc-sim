@@ -6,7 +6,14 @@ import type { GroundAircraft, GroundAirport, GroundState } from '../../engine/gr
 import type { TaxiGraph } from '../../engine/ground/graph.js';
 import { placeLabel } from '../../engine/ground/simulation.js';
 
-const C = {
+export type GroundPalette = Record<
+  | 'bg' | 'grass' | 'pavement' | 'apron' | 'runway' | 'runwayEdge' | 'centre' | 'taxiLine' | 'hold' | 'label' | 'stand'
+  | 'aircraft' | 'departure' | 'arrival' | 'selected' | 'conflict' | 'route' | 'preview' | 'veil' | 'veilStrong',
+  string
+>;
+
+/** Live palette; theme.ts swaps its values in place (see applyTheme). */
+const C: GroundPalette = {
   bg: '#101B21',
   grass: '#16252C',
   pavement: '#2B3B44',
@@ -25,7 +32,13 @@ const C = {
   conflict: '#FF5A4E',
   route: '#7FD3FF',
   preview: '#FFC857',
-} as const;
+  veil: 'rgba(16, 27, 33, 0.85)',
+  veilStrong: 'rgba(16, 27, 33, 0.8)',
+};
+
+export function setGroundPalette(p: GroundPalette): void {
+  Object.assign(C, p);
+}
 
 const FONT = '"JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace';
 const MARGIN = 18;
@@ -282,7 +295,7 @@ export class GroundView {
 
   private labelBox(ctx: CanvasRenderingContext2D, text: string, x: number, y: number): void {
     const w = ctx.measureText(text).width + 8;
-    ctx.fillStyle = 'rgba(16, 27, 33, 0.85)';
+    ctx.fillStyle = C.veil;
     ctx.fillRect(x - w / 2, y - 8, w, 16);
     ctx.fillStyle = C.taxiLine;
     ctx.textAlign = 'center';
@@ -385,7 +398,7 @@ export class GroundView {
     const by = y - 4;
     let bw = 0;
     for (const l of lines) bw = Math.max(bw, ctx.measureText(l).width);
-    ctx.fillStyle = 'rgba(16, 27, 33, 0.8)';
+    ctx.fillStyle = C.veilStrong;
     ctx.fillRect(bx - 3, by - 11, bw + 6, 28);
     ctx.fillStyle = color;
     lines.forEach((l, i) => ctx.fillText(l, bx, by + i * 13));

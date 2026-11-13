@@ -7,8 +7,10 @@
 
 import type { ScenarioOptions, TrafficProfile, WeatherProfile, WindStrength } from '../engine/index.js';
 import { DEFAULT_DISPLAY, type RadarDisplay } from './radar.js';
+import { DEFAULT_THEME, THEMES, type ThemeId } from './theme.js';
 
 export interface Settings {
+  theme: ThemeId;
   labelSize: 'small' | 'normal' | 'large';
   showTrails: boolean;
   trailsFor: 'all' | 'selected';
@@ -38,6 +40,7 @@ export interface Settings {
 }
 
 export const DEFAULT_SETTINGS: Settings = {
+  theme: DEFAULT_THEME,
   labelSize: 'normal',
   showTrails: true,
   trailsFor: 'all',
@@ -88,6 +91,7 @@ const GROUPS: readonly Group[] = [
     when: 'Applies now.',
     inGame: true,
     fields: [
+      { key: 'theme', label: 'Theme', choices: THEMES.map((t) => [t.id, t.name] as const), hint: 'Colours and fonts for the whole game. Altitude trail colours stay the same in every theme.' },
       { key: 'labelSize', label: 'Label size', choices: [['small', 'Small'], ['normal', 'Normal'], ['large', 'Large']] },
       { key: 'showTrails', label: 'Show trails' },
       { key: 'trailsFor', label: 'Trails for', choices: [['all', 'All aircraft'], ['selected', 'Selected aircraft only']] },

@@ -11,6 +11,7 @@ import { VERSION } from '../version.js';
 import { GroundApp } from './ground/app.js';
 import { Menu, type MenuStart } from './menu.js';
 import { PRESETS, matchPreset } from './presets.js';
+import { applyTheme } from './theme.js';
 import {
   beep,
   buildSettingsDialog,
@@ -31,6 +32,7 @@ let seed = Number(params.get('seed')) || newSeed();
 let map: MapInfo = findMap(params.get('map'));
 let trafficId = findTraffic(params.get('traffic')).id;
 let settings: Settings = loadSettings();
+applyTheme(settings.theme);
 let traffic: TrafficProfile = trafficFor(findTraffic(trafficId).profile, settings);
 let weather: WeatherProfile = weatherFor(settings);
 let options: ScenarioOptions | undefined = optionsFor(settings);
@@ -699,6 +701,7 @@ buildSettingsDialog(
   () => settings,
   (next) => {
     settings = next;
+    applyTheme(settings.theme);
     lastQuickKey = '';
     radar.setDisplay(radarDisplayFor(settings));
     trailLength = trailLengthFor(settings);

@@ -9,6 +9,25 @@ While the major version is 0, a minor release may also change behaviour that
 saved sessions or trained agents rely on; such changes are listed under
 **Changed**.
 
+## 0.12.0 - 2026-11-13
+
+### Added
+- Four colour and font themes, chosen on the main menu (top bar) and under
+  Settings > Scope display > Theme, applied instantly and remembered:
+  **Midnight aviation** (default: deep navy, electric cyan, Space Grotesk and
+  Inter), **Aviation green** (deep forest, aviation green, IBM Plex Sans and
+  Inter), **Amber phosphor** (classic scope amber, IBM Plex Mono) and
+  **Daylight tower** (light scope and panels, Manrope and Inter).
+- Themes cover the whole game: menu, panels, strips, radar and ground views.
+  Altitude trail colours are the same in every theme so they always mean the
+  same height.
+
+### Changed
+- The default look is now Midnight aviation (the previous look was a light
+  panel beside a dark scope; Daylight tower is the closest to it).
+- Fonts load from Google Fonts (Inter, IBM Plex Sans, IBM Plex Mono, Space
+  Grotesk, Manrope, JetBrains Mono) with system fallbacks, replacing Barlow.
+
 ## 0.11.2 - 2026-11-13
 
 ### Fixed

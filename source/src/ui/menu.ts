@@ -11,6 +11,7 @@ import { DEFAULT_DISPLAY, Radar } from './radar.js';
 import { GroundView } from './ground/view.js';
 import { GROUND_TRAFFIC } from './ground/app.js';
 import { saveSettings, type Settings } from './settings.js';
+import { THEMES, applyTheme, type ThemeId } from './theme.js';
 import { PRESETS, applyPreset, matchPreset, type Difficulty, type SessionChoice } from './presets.js';
 
 export interface MenuStart {
@@ -326,7 +327,44 @@ export class Menu {
     }
   }
 
+  private buildThemes(): void {
+    const box = el('menu-themes');
+    const buttons = THEMES.map((t) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'theme-swatch';
+      b.setAttribute('role', 'radio');
+      b.title = t.blurb;
+      b.innerHTML = '<span class="theme-chip" aria-hidden="true"></span><span></span>';
+      (b.firstElementChild as HTMLElement).style.background = t.swatch[0];
+      (b.firstElementChild as HTMLElement).style.setProperty('--chip-accent', t.swatch[1]);
+      (b.lastElementChild as HTMLElement).textContent = t.short;
+      b.addEventListener('click', () => this.setTheme(t.id));
+      box.append(b);
+      return [t.id, b] as const;
+    });
+    this.themeButtons = new Map<ThemeId, HTMLButtonElement>(buttons);
+    this.markTheme();
+  }
+
+  private themeButtons = new Map<ThemeId, HTMLButtonElement>();
+
+  private markTheme(): void {
+    const cur = this.o.settings().theme;
+    for (const [id, b] of this.themeButtons) b.setAttribute('aria-checked', String(id === cur));
+  }
+
+  private setTheme(id: ThemeId): void {
+    const next = { ...this.o.settings(), theme: id };
+    saveSettings(next);
+    this.o.onSettings(next);
+    applyTheme(id);
+    this.markTheme();
+    this.drawPreview();
+  }
+
   private wire(): void {
+    this.buildThemes();
     el('menu-start').addEventListener('click', () => this.start());
     const file = el<HTMLInputElement>('menu-load-file');
     el('menu-load').addEventListener('click', () => file.click());
