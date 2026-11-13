@@ -68,6 +68,8 @@ export interface Aircraft {
   targetAltitude: number;
   targetSpeed: number;
   expedite: boolean;
+  /** Current vertical speed, ft/min (negative descending). Eases toward the target rate. */
+  verticalSpeed: number;
 
   // Guidance
   lateralMode: LateralMode;

@@ -200,6 +200,7 @@ function baseAircraft(
     targetAltitude: 0,
     targetSpeed: 0,
     expedite: false,
+    verticalSpeed: 0,
     lateralMode: 'heading',
     route: [],
     runway: null,

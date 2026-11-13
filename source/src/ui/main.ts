@@ -56,7 +56,11 @@ document.title = `ATC Simulator ${VERSION}`;
 const windArrow = $('wind-arrow') as unknown as SVGGElement;
 const windText = $('wind-text');
 const inUseEl = $('runways-in-use');
-const speedButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-speed]'));
+const speedSlider = $<HTMLInputElement>('speed');
+const speedOut = $('speed-out');
+const scoreEl = $('score');
+/** Slider stops: pause, 1x ... 16x, then as fast as the computer allows. */
+const SPEEDS: readonly (number | 'max')[] = [0, 1, 2, 4, 8, 16, 'max'];
 
 buildDialTicks();
 
@@ -178,6 +182,7 @@ function updatePanel(now: number): void {
   inUseEl.textContent = `In use: ${state.runwaysInUse.join(', ') || 'none'}`;
 
   const s = state.stats;
+  scoreEl.textContent = String(s.score);
   const html = `
     <div><dt>Score</dt><dd>${s.score}</dd></div>
     <div><dt>Landed</dt><dd>${s.landed}</dd></div>
@@ -351,6 +356,7 @@ function handleEvents(events: SimEvent[]): void {
         log(`Separation lost: ${e.a} and ${e.b}, ${e.distance.toFixed(1)} nm, ${Math.round(e.verticalFt)} ft`, 'bad');
         if (settings.sound) beep('loss');
         if (settings.pauseOnLoss) pauseFor('separation loss');
+        flashScore($('score-box'));
         break;
       case 'conflictWarning':
         if (!settings.conflictAlerts) break;
@@ -393,13 +399,40 @@ function select(id: number | null): void {
   lastPanelUpdate = 0; // refresh strips and quick buttons now
 }
 
+// Click an aircraft to select it; drag its data block to move it out of the
+// way (it stays there); double-click a block to put it back automatically.
+let dragging: { id: number; x: number; y: number } | null = null;
+
 canvas.addEventListener('pointerdown', (ev) => {
   select(radar.pick(ev.clientX, ev.clientY));
+  const label = radar.labelAt(ev.clientX, ev.clientY);
+  if (label !== null) {
+    dragging = { id: label, x: ev.clientX, y: ev.clientY };
+    canvas.setPointerCapture(ev.pointerId);
+  }
   ev.preventDefault();
 });
 
 canvas.addEventListener('pointermove', (ev) => {
-  canvas.style.cursor = radar.isOverAircraft(ev.clientX, ev.clientY) ? 'pointer' : 'crosshair';
+  if (dragging) {
+    radar.moveLabel(dragging.id, ev.clientX - dragging.x, ev.clientY - dragging.y);
+    dragging.x = ev.clientX;
+    dragging.y = ev.clientY;
+    canvas.style.cursor = 'grabbing';
+    return;
+  }
+  canvas.style.cursor =
+    radar.labelAt(ev.clientX, ev.clientY) !== null ? 'grab' : radar.isOverAircraft(ev.clientX, ev.clientY) ? 'pointer' : 'crosshair';
+});
+
+const endDrag = () => {
+  dragging = null;
+};
+canvas.addEventListener('pointerup', endDrag);
+canvas.addEventListener('pointercancel', endDrag);
+canvas.addEventListener('dblclick', (ev) => {
+  const label = radar.labelAt(ev.clientX, ev.clientY);
+  if (label !== null) radar.resetLabel(label);
 });
 
 function issue(text: string): void {
@@ -474,7 +507,10 @@ function ensureGroundApp(): GroundApp {
     rate: $('g-rate'),
     wind: $('g-wind'),
     runway: $('g-runway'),
-    speedButtons: Array.from(document.querySelectorAll<HTMLButtonElement>('[data-gspeed]')),
+    speed: $<HTMLInputElement>('g-speed'),
+    speedOut: $('g-speed-out'),
+    score: $('g-score'),
+    scoreBox: $('g-score-box'),
     stats: $('g-stats'),
     departures: $<HTMLOListElement>('g-departures'),
     arrivals: $<HTMLOListElement>('g-arrivals'),
@@ -582,15 +618,22 @@ window.addEventListener('popstate', () => {
 function setSpeed(value: number | 'max'): void {
   speed = value;
   accumulator = 0;
-  for (const b of speedButtons) b.setAttribute('aria-pressed', String(b.dataset.speed === String(value)));
+  speedSlider.value = String(Math.max(0, SPEEDS.indexOf(value)));
+  speedOut.textContent = speedLabel(value);
 }
 
-for (const b of speedButtons) {
-  b.addEventListener('click', () => {
-    const v = b.dataset.speed === 'max' ? 'max' : Number(b.dataset.speed);
-    setSpeed(v);
-    input.focus();
-  });
+function speedLabel(v: number | 'max'): string {
+  return v === 0 ? 'Paused' : v === 'max' ? 'Max' : `${v}×`;
+}
+
+speedSlider.addEventListener('input', () => setSpeed(SPEEDS[Number(speedSlider.value)] ?? 1));
+speedSlider.addEventListener('change', () => input.focus());
+
+/** Red pulse on the score button after a penalty, so it is noticed while the breakdown stays hidden. */
+function flashScore(box: HTMLElement): void {
+  box.classList.remove('flash');
+  void box.offsetWidth; // restart the animation
+  box.classList.add('flash');
 }
 
 $('new-game').addEventListener('click', () => {

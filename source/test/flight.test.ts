@@ -22,15 +22,36 @@ test('forced left turn goes the long way round', () => {
   assert.equal(ac.heading, 120);
 });
 
-test('climbs at its type rate and doubles when expedited', () => {
+test('climbs at its type rate after easing in; expedite is x1.5 up to 3,000 ft/min', () => {
   const sim = emptySim();
   const ac = sim.addAircraft({ callsign: 'TST1', x: 0, y: 10, altitude: 5000, heading: 90, category: 'medium' });
   sim.command({ type: 'altitude', callsign: 'TST1', altitude: 9000 });
-  sim.run(ticks(60, sim));
-  assert.equal(Math.round(ac.altitude), 7500); // A320: 2,500 ft/min
+  sim.run(ticks(2, sim));
+  assert.ok(ac.verticalSpeed > 0 && ac.verticalSpeed <= 500, 'the climb starts gently');
+  sim.run(ticks(58, sim));
+  assert.equal(ac.verticalSpeed, 2500); // A320: 2,500 ft/min once established
+  // 60 s at 2,500 ft/min, less the 10 s easing in (about 208 ft).
+  assert.ok(Math.abs(ac.altitude - (5000 + 2500 - 208)) < 20, String(ac.altitude));
   sim.command({ type: 'altitude', callsign: 'TST1', altitude: 12000, expedite: true });
-  sim.run(ticks(30, sim));
-  assert.equal(Math.round(ac.altitude), 10000); // 5,000 ft/min for 30 s
+  sim.run(ticks(10, sim));
+  assert.equal(ac.verticalSpeed, 3000); // 2,500 x 1.5 = 3,750, capped at 3,000
+});
+
+test('descents ease in, stay within 2,000 ft/min, and level off smoothly', () => {
+  const sim = emptySim();
+  const ac = sim.addAircraft({ callsign: 'TST1', x: 0, y: 10, altitude: 8000, heading: 90, category: 'medium' });
+  sim.command({ type: 'altitude', callsign: 'TST1', altitude: 4000 });
+  let maxRate = 0;
+  let lastRate = 0;
+  for (let i = 0; i < ticks(200, sim); i++) {
+    sim.step();
+    maxRate = Math.max(maxRate, -ac.verticalSpeed);
+    if (ac.altitude < 4300 && ac.altitude > 4000) assert.ok(-ac.verticalSpeed <= -lastRate || lastRate === 0, 'slows while levelling off');
+    lastRate = ac.verticalSpeed;
+  }
+  assert.equal(ac.altitude, 4000);
+  assert.equal(ac.verticalSpeed, 0);
+  assert.ok(maxRate <= 2000, String(maxRate));
 });
 
 test('moves 250 kt for one minute = 4.17 nm', () => {

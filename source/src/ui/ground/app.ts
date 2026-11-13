@@ -32,6 +32,8 @@ export const GROUND_TRAFFIC: readonly { id: string; label: string; traffic: Grou
 ];
 
 const NM = 1852;
+/** Slider stops for the ground mode. */
+const GROUND_SPEEDS: readonly number[] = [0, 1, 2, 4, 8];
 const MAX_LOG = 60;
 
 interface Els {
@@ -44,7 +46,10 @@ interface Els {
   rate: HTMLElement;
   wind: HTMLElement;
   runway: HTMLElement;
-  speedButtons: HTMLButtonElement[];
+  speed: HTMLInputElement;
+  speedOut: HTMLElement;
+  score: HTMLElement;
+  scoreBox: HTMLElement;
   stats: HTMLElement;
   departures: HTMLOListElement;
   arrivals: HTMLOListElement;
@@ -184,6 +189,7 @@ export class GroundApp {
     this.el.wind.textContent = s.wind.speed < 1 ? 'Calm' : `${String(Math.round(s.wind.direction)).padStart(3, '0')}° ${Math.round(s.wind.speed)} kt`;
     this.el.runway.textContent = `Runway in use: ${s.runway}`;
     const st = s.stats;
+    this.el.score.textContent = String(st.score);
     const avg = (sum: number, n: number) => (n > 0 ? `${Math.round(sum / n / 60)} min` : '-');
     const html = `
       <div><dt>Score</dt><dd>${st.score}</dd></div>
@@ -417,9 +423,8 @@ export class GroundApp {
     input.addEventListener('keydown', (ev) => {
       if (ev.key === 'Escape') this.select(null);
     });
-    for (const b of this.el.speedButtons) {
-      b.addEventListener('click', () => this.setSpeed(Number(b.dataset.gspeed)));
-    }
+    this.el.speed.addEventListener('input', () => this.setSpeed(GROUND_SPEEDS[Number(this.el.speed.value)] ?? 1));
+    this.el.speed.addEventListener('change', () => this.el.input.focus());
     this.el.newGame.addEventListener('click', () => this.restart());
   }
 
@@ -469,7 +474,8 @@ export class GroundApp {
   private setSpeed(v: number): void {
     this.speed = v;
     this.accumulator = 0;
-    for (const b of this.el.speedButtons) b.setAttribute('aria-pressed', String(Number(b.dataset.gspeed) === v));
+    this.el.speed.value = String(Math.max(0, GROUND_SPEEDS.indexOf(v)));
+    this.el.speedOut.textContent = v === 0 ? 'Paused' : `${v}×`;
   }
 
   private handle(events: GroundEvent[]): void {
@@ -516,6 +522,9 @@ export class GroundApp {
           break;
         case 'conflict':
           this.logMsg(`Ground conflict: ${e.a} and ${e.b}, ${e.distance} m apart`, 'bad');
+          this.el.scoreBox.classList.remove('flash');
+          void this.el.scoreBox.offsetWidth;
+          this.el.scoreBox.classList.add('flash');
           break;
         case 'runwayChanged':
           this.logMsg(`Wind shift: runway ${e.runway} now in use`, 'warn');

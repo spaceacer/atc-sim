@@ -302,6 +302,7 @@ export class Simulation {
       targetAltitude: spec.altitude,
       targetSpeed: speed,
       expedite: false,
+      verticalSpeed: 0,
       lateralMode: 'heading',
       route: [],
       runway: null,

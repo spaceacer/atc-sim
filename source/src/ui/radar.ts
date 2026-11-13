@@ -38,7 +38,7 @@ export interface RadarDisplay {
   conflictAlerts: boolean; // show predicted conflicts in orange
 }
 
-export const DEFAULT_DISPLAY: RadarDisplay = { labelPx: 11, leaderSec: 60, rangeRings: false, fixNames: true, conflictAlerts: true };
+export const DEFAULT_DISPLAY: RadarDisplay = { labelPx: 11, leaderSec: 30, rangeRings: false, fixNames: true, conflictAlerts: true };
 const BLIP_HIT_PX = 14;
 
 export interface Prev {
@@ -48,6 +48,26 @@ export interface Prev {
 
 export interface Trail {
   points: { x: number; y: number }[];
+}
+
+interface Rect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+interface Segment {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}
+
+/** Where a data block sits, as the top-left corner relative to the blip, in px. */
+interface Offset {
+  dx: number;
+  dy: number;
 }
 
 interface HitBox {
@@ -76,6 +96,16 @@ export class Radar {
   /** Screen positions from the last frame, for click hit-testing. */
   private hitTargets: HitBox[] = [];
   private display: RadarDisplay = DEFAULT_DISPLAY;
+  /** Static things labels should avoid: runway ends, fixes and their names (px). */
+  private staticRects: Rect[] = [];
+  private runwaySegments: Segment[] = [];
+  private collectingStatic = false;
+  /** Data block position chosen last frame (index into the candidates), to avoid jitter. */
+  private lastSlot = new Map<number, number>();
+  /** Positions the controller dragged a data block to. */
+  private manual = new Map<number, Offset>();
+  /** Data block rectangles from the last frame, for dragging. */
+  private labelRects = new Map<number, Rect & { px: number; py: number }>();
 
   constructor(canvas: HTMLCanvasElement, airport: Airport, display: RadarDisplay = DEFAULT_DISPLAY) {
     this.display = display;
@@ -139,6 +169,30 @@ export class Radar {
     return null;
   }
 
+  /** The aircraft whose data block is under the point, or null. */
+  labelAt(clientX: number, clientY: number): number | null {
+    const rect = this.canvas.getBoundingClientRect();
+    const px = clientX - rect.left;
+    const py = clientY - rect.top;
+    let found: number | null = null;
+    for (const [id, r] of this.labelRects) {
+      if (px >= r.x - 3 && px <= r.x + r.w + 3 && py >= r.y - 3 && py <= r.y + r.h + 3) found = id;
+    }
+    return found;
+  }
+
+  /** Move a data block by (dx, dy) px from where it was drawn last; it stays there until reset. */
+  moveLabel(id: number, dx: number, dy: number): void {
+    const r = this.labelRects.get(id);
+    if (!r) return;
+    this.manual.set(id, { dx: r.x - r.px + dx, dy: r.y - r.py + dy });
+  }
+
+  /** Back to automatic placement. */
+  resetLabel(id: number): void {
+    this.manual.delete(id);
+  }
+
   /** True if the point is over an aircraft (for the hover cursor). */
   isOverAircraft(clientX: number, clientY: number): boolean {
     return this.pick(clientX, clientY) !== null;
@@ -150,23 +204,100 @@ export class Radar {
     ctx.drawImage(this.staticLayer, 0, 0);
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.hitTargets = [];
+    this.labelRects.clear();
 
     const selected = state.aircraft.find((a) => a.id === selectedId);
     if (selected) this.drawSelectionAids(selected);
 
-    // Draw selected aircraft last so its block sits on top.
+    // Screen positions first, so every data block can be placed clear of the others.
+    const shown: { ac: Aircraft; x: number; y: number; px: number; py: number; lines: string[]; w: number; h: number }[] = [];
+    const fs = this.display.labelPx;
+    const lh = Math.round(fs * 1.2);
+    ctx.font = `${fs}px ${FONT}`;
     for (const ac of state.aircraft) {
-      if (ac.id !== selectedId) this.drawOne(ac, prev, alpha, false, trails);
+      if (ac.status === 'waiting') continue; // holding short: shown on the strips only
+      const p = prev.get(ac.id);
+      const x = p ? p.x + (ac.x - p.x) * alpha : ac.x;
+      const y = p ? p.y + (ac.y - p.y) * alpha : ac.y;
+      const lines = [ac.callsign, altitudeLine(ac)];
+      if (ac.id === selectedId) lines.push(`${ac.type} ${modeLine(ac)}`);
+      let w = 0;
+      for (const l of lines) w = Math.max(w, ctx.measureText(l).width);
+      shown.push({ ac, x, y, px: this.sx(x), py: this.sy(y), lines, w, h: lines.length * lh });
     }
-    if (selected) this.drawOne(selected, prev, alpha, true, trails);
+    const offsets = this.placeLabels(shown, selectedId);
+
+    // Draw the selected aircraft last so its block sits on top.
+    for (const s of shown) {
+      if (s.ac.id !== selectedId) this.drawAircraft(s.ac, s.x, s.y, false, trails.get(s.ac.id), s.lines, offsets.get(s.ac.id));
+    }
+    const sel = shown.find((s) => s.ac.id === selectedId);
+    if (sel) this.drawAircraft(sel.ac, sel.x, sel.y, true, trails.get(sel.ac.id), sel.lines, offsets.get(sel.ac.id));
   }
 
-  private drawOne(ac: Aircraft, prev: Map<number, Prev>, alpha: number, selected: boolean, trails: Map<number, Trail>): void {
-    if (ac.status === 'waiting') return; // holding short: shown on the strips only
-    const p = prev.get(ac.id);
-    const x = p ? p.x + (ac.x - p.x) * alpha : ac.x;
-    const y = p ? p.y + (ac.y - p.y) * alpha : ac.y;
-    this.drawAircraft(ac, x, y, selected, trails.get(ac.id));
+  /**
+   * Data block placement: each block tries eight spots around its blip and
+   * takes the one that overlaps least with other blocks, blips, runways and
+   * fixes. The spot used last frame gets a bonus so blocks do not flicker,
+   * and a block the controller dragged stays where it was put.
+   */
+  private placeLabels(
+    shown: readonly { ac: Aircraft; px: number; py: number; w: number; h: number }[],
+    selectedId: number | null,
+  ): Map<number, Offset> {
+    const out = new Map<number, Offset>();
+    const placed: Rect[] = [];
+    const blips: Rect[] = shown.map((s) => ({ x: s.px - 5, y: s.py - 5, w: 10, h: 10 }));
+    const fs = this.display.labelPx;
+    const ids = new Set(shown.map((s) => s.ac.id));
+    for (const id of [...this.manual.keys()]) if (!ids.has(id)) this.manual.delete(id);
+    for (const id of [...this.lastSlot.keys()]) if (!ids.has(id)) this.lastSlot.delete(id);
+
+    // Dragged blocks first (they are fixed), then the selected one, then the rest.
+    const rank = (s: { ac: Aircraft }) => (this.manual.has(s.ac.id) ? 0 : s.ac.id === selectedId ? 1 : 2);
+    const order = [...shown].sort((a, b) => rank(a) - rank(b));
+    for (const s of order) {
+      const m = this.manual.get(s.ac.id);
+      if (m) {
+        out.set(s.ac.id, m);
+        placed.push({ x: s.px + m.dx, y: s.py + m.dy, w: s.w, h: s.h });
+        continue;
+      }
+      const { w, h } = s;
+      const cands: Offset[] = [
+        { dx: 10, dy: -12 - fs + 1 }, // right, above (the classic spot)
+        { dx: 10, dy: 7 }, // right, below
+        { dx: -10 - w, dy: -12 - fs + 1 }, // left, above
+        { dx: -10 - w, dy: 7 }, // left, below
+        { dx: -w / 2, dy: -16 - h }, // above
+        { dx: -w / 2, dy: 12 }, // below
+        { dx: 26, dy: -h / 2 }, // further right
+        { dx: -26 - w, dy: -h / 2 }, // further left
+      ];
+      const last = this.lastSlot.get(s.ac.id);
+      let best = 0;
+      let bestScore = Infinity;
+      cands.forEach((c, i) => {
+        const r = { x: s.px + c.dx, y: s.py + c.dy, w, h };
+        let score = i * 4; // mild preference for the classic spots
+        if (i === last) score -= 40; // stickiness
+        for (const o of placed) score += overlap(r, o) * 3;
+        shown.forEach((o, k) => {
+          if (o.ac.id !== s.ac.id) score += overlap(r, blips[k]) * 3;
+        });
+        for (const o of this.staticRects) score += overlap(r, o);
+        for (const seg of this.runwaySegments) if (segmentHitsRect(seg, r)) score += (w * h) / 3;
+        if (r.x < 0 || r.y < 0 || r.x + w > this.w || r.y + h > this.h) score += w * h;
+        if (score < bestScore) {
+          bestScore = score;
+          best = i;
+        }
+      });
+      this.lastSlot.set(s.ac.id, best);
+      out.set(s.ac.id, cands[best]);
+      placed.push({ x: s.px + cands[best].dx, y: s.py + cands[best].dy, w, h });
+    }
+    return out;
   }
 
   private sx(x: number): number {
@@ -183,6 +314,8 @@ export class Radar {
   private drawStatic(): void {
     const ctx = this.staticLayer.getContext('2d');
     if (!ctx) return;
+    this.staticRects = [];
+    this.runwaySegments = [];
     const { halfWidth: hw, halfHeight: hh } = this.airport.boundary;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.fillStyle = COLORS.outside;
@@ -272,6 +405,7 @@ export class Radar {
       ctx.lineTo(this.sx(a.thresholdX - nx * half), this.sy(a.thresholdY - ny * half));
       ctx.closePath();
       ctx.fill();
+      this.runwaySegments.push({ x1: this.sx(a.thresholdX), y1: this.sy(a.thresholdY), x2: this.sx(b.thresholdX), y2: this.sy(b.thresholdY) });
     }
     ctx.font = `600 11px ${FONT}`;
     ctx.textAlign = 'center';
@@ -281,13 +415,18 @@ export class Radar {
       const { dx, dy } = headingVector(rwy.heading);
       const off = 14 / this.scale + 0.15;
       ctx.fillStyle = this.inUse.includes(rwy.id) ? COLORS.runway : COLORS.runwayIdle;
-      ctx.fillText(rwy.id, this.sx(rwy.thresholdX - dx * off), this.sy(rwy.thresholdY - dy * off));
+      const rx = this.sx(rwy.thresholdX - dx * off);
+      const ry = this.sy(rwy.thresholdY - dy * off);
+      ctx.fillText(rwy.id, rx, ry);
+      this.staticRects.push({ x: rx - 10, y: ry - 7, w: 20, h: 14 });
     }
 
     // Fixes.
     ctx.font = `10px ${FONT}`;
     ctx.textBaseline = 'middle';
+    this.collectingStatic = true;
     for (const f of this.airport.fixes) this.drawFix(ctx, f, f.kind === 'exit' ? COLORS.exit : COLORS.fix);
+    this.collectingStatic = false;
 
     // Scale bar, bottom left inside the boundary.
     const barNm = 5;
@@ -337,6 +476,7 @@ export class Radar {
       ctx.closePath();
       ctx.stroke();
     }
+    if (this.collectingStatic) this.staticRects.push({ x: x - 6, y: y - 6, w: 12, h: 12 });
     if (!this.display.fixNames && f.kind !== 'exit') return;
     const { halfWidth: hw, halfHeight: hh } = this.airport.boundary;
     const labelW = ctx.measureText(f.name).width;
@@ -353,6 +493,7 @@ export class Radar {
       ly = y - 15;
     }
     ctx.fillText(f.name, lx, ly);
+    if (this.collectingStatic) this.staticRects.push({ x: lx - 1, y: ly - 7, w: labelW + 2, h: 14 });
   }
 
   // -------------------------------------------------------------------------
@@ -429,7 +570,15 @@ export class Radar {
     ctx.restore();
   }
 
-  private drawAircraft(ac: Aircraft, x: number, y: number, selected: boolean, trail: Trail | undefined): void {
+  private drawAircraft(
+    ac: Aircraft,
+    x: number,
+    y: number,
+    selected: boolean,
+    trail: Trail | undefined,
+    lines: string[],
+    offset: Offset | undefined,
+  ): void {
     const ctx = this.ctx;
     const px = this.sx(x);
     const py = this.sy(y);
@@ -487,26 +636,73 @@ export class Radar {
       ctx.lineWidth = 1;
     }
 
-    // Data block.
-    const lines = [ac.callsign, altitudeLine(ac)];
-    if (selected) lines.push(`${ac.type} ${modeLine(ac)}`);
+    // Data block, where placeLabels put it.
     const fs = this.display.labelPx;
     const lh = Math.round(fs * 1.2);
     ctx.font = `${fs}px ${FONT}`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
-    const bx = px + 10;
-    const by = py - 12;
     let bw = 0;
     for (const l of lines) bw = Math.max(bw, ctx.measureText(l).width);
-    if (selected) {
-      ctx.fillStyle = 'rgba(15, 25, 31, 0.78)';
-      ctx.fillRect(bx - 3, by - fs, bw + 6, lines.length * lh + 3);
+    const bh = lines.length * lh;
+    const classic = { dx: 10, dy: -12 - fs + 1 };
+    const off = offset ?? classic;
+    const rx = px + off.dx;
+    const ry = py + off.dy;
+    // Away from the classic spot, a thin line ties the block to its blip.
+    if (off.dx !== classic.dx || off.dy !== classic.dy) {
+      const cx = Math.max(rx, Math.min(px, rx + bw));
+      const cy = Math.max(ry, Math.min(py, ry + bh));
+      if (Math.hypot(cx - px, cy - py) > 8) {
+        ctx.strokeStyle = color;
+        ctx.globalAlpha = 0.5;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.lineTo(cx, cy);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
     }
+    // A dark backing keeps the block readable over runways, fixes and other traffic.
+    ctx.fillStyle = selected ? 'rgba(15, 25, 31, 0.85)' : 'rgba(23, 36, 44, 0.7)';
+    ctx.fillRect(rx - 3, ry - 1, bw + 6, bh + 3);
     ctx.fillStyle = color;
-    lines.forEach((l, i) => ctx.fillText(l, bx, by + i * lh));
-    this.hitTargets.push({ id: ac.id, sx: px, sy: py, bx, by: by - fs + 1, bw, bh: lines.length * lh });
+    lines.forEach((l, i) => ctx.fillText(l, rx, ry + fs - 1 + i * lh));
+    this.labelRects.set(ac.id, { x: rx, y: ry, w: bw, h: bh, px, py });
+    this.hitTargets.push({ id: ac.id, sx: px, sy: py, bx: rx, by: ry, bw, bh });
   }
+}
+
+function overlap(a: Rect, b: Rect): number {
+  const w = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+  const h = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+  return w > 0 && h > 0 ? w * h : 0;
+}
+
+/** Does the segment pass through the rectangle (grown by 2 px)? Liang-Barsky clipping. */
+function segmentHitsRect(s: Segment, r: Rect): boolean {
+  const dx = s.x2 - s.x1;
+  const dy = s.y2 - s.y1;
+  const edges: [number, number][] = [
+    [-dx, s.x1 - (r.x - 2)],
+    [dx, r.x + r.w + 2 - s.x1],
+    [-dy, s.y1 - (r.y - 2)],
+    [dy, r.y + r.h + 2 - s.y1],
+  ];
+  let t0 = 0;
+  let t1 = 1;
+  for (const [p, q] of edges) {
+    if (p === 0) {
+      if (q < 0) return false;
+      continue;
+    }
+    const t = q / p;
+    if (p < 0) t0 = Math.max(t0, t);
+    else t1 = Math.min(t1, t);
+    if (t0 > t1) return false;
+  }
+  return true;
 }
 
 function altitudeLine(ac: Aircraft): string {

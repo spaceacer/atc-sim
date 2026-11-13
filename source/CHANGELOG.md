@@ -9,6 +9,30 @@ While the major version is 0, a minor release may also change behaviour that
 saved sessions or trained agents rely on; such changes are listed under
 **Changed**.
 
+## 0.9.0 - 2026-11-13
+
+### Changed
+- Game layout: an icon rail on the left (Menu, Save, Restart, score, Settings),
+  a smaller clock and wind at the top of the panel, the arrival and departure
+  strips next, then messages (collapsible) and command help. Speed is a slider
+  (pause, 1x-16x, Max) pinned to the foot of the panel. The command line stays
+  under the scope.
+- The score and its breakdown moved into a popover on the rail's trophy
+  (hover or keyboard focus); the trophy flashes red after a penalty.
+- Climbs and descents ease in over about 8 s and level off smoothly instead
+  of starting and stopping at full rate. Descents are capped at 2,000 ft/min
+  (737s and A321s were 2,500). Expedite is 1.5 times the normal rate, at most
+  3,000 ft/min (was double, up to 5,000). Sessions saved by 0.8.0 replay with
+  slightly different vertical profiles.
+- Leader lines default to 30 s of flight (was 60 s); a stored 60 s setting is
+  moved to 30 s once.
+
+### Added
+- Data blocks place themselves clear of other blocks, aircraft, runways and
+  fixes (eight candidate spots, sticky to avoid flicker), with a thin line to
+  the blip when moved away, and a translucent backing for legibility. Drag a
+  block to move it; double-click to return it to automatic placement.
+
 ## 0.8.0 - 2026-11-13
 
 ### Added

@@ -3,8 +3,8 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="version" content="0.8.0" />
-    <title>ATC Simulator 0.8.0</title>
+    <meta name="version" content="0.9.0" />
+    <title>ATC Simulator 0.9.0</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -19,7 +19,7 @@
         <div class="wordmark">
           <span class="wordmark-dot" aria-hidden="true"></span>
           <h1>ATC Simulator</h1>
-          <span class="wordmark-version">v<span id="menu-version">0.8.0</span></span>
+          <span class="wordmark-version">v<span id="menu-version">0.9.0</span></span>
         </div>
         <button id="menu-help" type="button" class="m-link">How to play</button>
       </header>
@@ -67,6 +67,16 @@
     </section>
 
     <main class="console" id="atc-console" hidden>
+      <nav class="rail" aria-label="Game controls">
+        <button id="menu-btn" type="button" class="rail-btn" title="Main menu (ends the session)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/><path d="M9 12h11"/></svg><span>Menu</span></button>
+        <button id="save" type="button" class="rail-btn" title="Save session to a file"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4"/><path d="M8 20v-6h8v6"/></svg><span>Save</span></button>
+        <button id="new-game" type="button" class="rail-btn" title="Restart: same airport and settings, new traffic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg><span>Restart</span></button>
+        <div class="rail-score" id="score-box" tabindex="0" aria-describedby="stats">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8v6a4 4 0 0 1-8 0z"/><path d="M8 6H5a3 3 0 0 0 3 4"/><path d="M16 6h3a3 3 0 0 1-3 4"/><path d="M12 14v4"/><path d="M8 20h8"/></svg><span id="score">0</span>
+          <dl id="stats" class="stats score-pop" role="tooltip"></dl>
+        </div>
+        <button id="settings" type="button" class="rail-btn rail-end" title="Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/></svg><span>Settings</span></button>
+      </nav>
       <section class="scope" aria-label="Radar">
         <div class="view">
           <canvas id="radar"></canvas>
@@ -81,35 +91,15 @@
       </section>
 
       <aside class="panel">
-        <header class="session">
-          <button id="menu-btn" type="button" class="menu-btn" aria-label="Main menu">&#8592; Menu</button>
-          <div class="session-info">
-            <div id="session-airport" class="session-airport">--</div>
-            <div id="session-meta" class="session-meta">--</div>
-          </div>
-        </header>
-        <div class="files">
-          <button id="save" type="button" class="link">Save session</button>
-          <button id="new-game" type="button" class="link" title="Same airport and settings, new traffic">Restart</button>
-          <button id="settings" type="button" class="settings-btn" aria-label="Settings">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.6 7.6 0 0 0 0 2l-2.2 1.6 2 3.5 2.5-1a7.4 7.4 0 0 0 1.7 1l.4 2.6h4l.4-2.6a7.4 7.4 0 0 0 1.7-1l2.5 1 2-3.5zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)"/></svg>
-            Settings
-          </button>
-        </div>
-
-        <div class="clock-row">
-          <div>
+        <header class="status">
+          <div class="status-time">
             <div id="clock" class="clock">00:00:00</div>
-            <div id="rate" class="rate">1.0× real time</div>
+            <div id="rate" class="rate">paused</div>
           </div>
           <figure class="wind" aria-label="Wind">
-            <svg id="wind-dial" viewBox="-50 -50 100 100" width="84" height="84" aria-hidden="true">
+            <svg viewBox="-50 -50 100 100" width="46" height="46" aria-hidden="true">
               <circle r="40" class="dial-face" />
               <g id="dial-ticks"></g>
-              <text y="-43" class="dial-label">N</text>
-              <text x="46" y="3.5" class="dial-label">E</text>
-              <text y="50" class="dial-label">S</text>
-              <text x="-46" y="3.5" class="dial-label">W</text>
               <g id="wind-arrow">
                 <line y1="-36" y2="18" class="dial-arrow" />
                 <path d="M0 26 L-6 14 L6 14 Z" class="dial-head" />
@@ -121,59 +111,66 @@
               <div id="runways-in-use" class="in-use">In use: --</div>
             </figcaption>
           </figure>
+        </header>
+        <div class="session-line"><span id="session-airport" class="session-airport">--</span> <span id="session-meta" class="session-meta">--</span></div>
+
+        <div class="panel-scroll">
+          <section class="bay" aria-labelledby="arr-h">
+            <h2 id="arr-h">Arrivals <span id="arr-count" class="count"></span></h2>
+            <ol id="arrivals" class="strips"></ol>
+          </section>
+          <section class="bay" aria-labelledby="dep-h">
+            <h2 id="dep-h">Departures <span id="dep-count" class="count"></span></h2>
+            <ol id="departures" class="strips"></ol>
+          </section>
+
+          <details class="msgs" open>
+            <summary>Messages</summary>
+            <ol id="log" class="log" aria-live="polite"></ol>
+          </details>
+          <details class="help">
+            <summary>Commands</summary>
+            <table>
+              <tr><td><code>C 240</code></td><td>Turn to heading 240 (000 to 360; add L or R to force the turn)</td></tr>
+              <tr><td><code>C 3</code></td><td>Climb or descend to 3,000 ft (add X to expedite)</td></tr>
+              <tr><td><code>C PUNE</code></td><td>Direct to a fix; list several for a route: <code>C OSKAR LOTAV</code></td></tr>
+              <tr><td><code>S 210</code></td><td>Speed 210 kt</td></tr>
+              <tr><td><code>I 27</code></td><td>Cleared to intercept: joins the centreline by itself (up to 30°), holds altitude until established, then follows the glidepath. Runway in use, within 60° of its heading, at or below 3,000 ft</td></tr>
+              <tr><td><code>L 27</code></td><td>Cleared to land. Given after <code>I</code>, it must come by 4 nm out or the aircraft goes around. Given first, it covers the approach too</td></tr>
+              <tr><td><code>W</code></td><td>Line up and wait (<code>W 32</code> to use another runway)</td></tr>
+              <tr><td><code>T</code></td><td>Cleared for takeoff (<code>T 32</code> for another runway)</td></tr>
+              <tr><td><code>H</code></td><td>Hold at present position; <code>H OSKAR</code> holds at a fix. Right turns, 1-minute legs; add <code>L</code> for left turns</td></tr>
+              <tr><td><code>A</code></td><td>Go around (or cancel a landing clearance not yet on final)</td></tr>
+            </table>
+            <p>
+              Chain clauses: <code>IGO451 C PUNE C 11 T</code>. Departures wait at their runway until you line them up
+              (<code>W</code>) or clear them for takeoff (<code>T</code>); they must leave through their exit fix (amber
+              ring when selected) at or above the strip's altitude. Keep aircraft 3 nm or 1,000 ft apart: orange means a conflict is
+              predicted within a minute, red means separation is lost. Wind decides which runways are in use: more
+              than 5 kt of tailwind and a runway closes. Session seed <span id="seed"></span>.
+            </p>
+          </details>
+          <p class="version">ATC Simulator <span id="version">0.9.0</span></p>
         </div>
 
-        <div class="speed" role="group" aria-label="Simulation speed">
-          <button type="button" data-speed="0" aria-pressed="false">Pause</button>
-          <button type="button" data-speed="1" aria-pressed="true">1×</button>
-          <button type="button" data-speed="2" aria-pressed="false">2×</button>
-          <button type="button" data-speed="4" aria-pressed="false">4×</button>
-          <button type="button" data-speed="8" aria-pressed="false">8×</button>
-          <button type="button" data-speed="16" aria-pressed="false">16×</button>
-          <button type="button" data-speed="max" aria-pressed="false">Max</button>
-        </div>
-
-        <dl id="stats" class="stats"></dl>
-
-        <section class="bay" aria-labelledby="arr-h">
-          <h2 id="arr-h">Arrivals <span id="arr-count" class="count"></span></h2>
-          <ol id="arrivals" class="strips"></ol>
-        </section>
-        <section class="bay" aria-labelledby="dep-h">
-          <h2 id="dep-h">Departures <span id="dep-count" class="count"></span></h2>
-          <ol id="departures" class="strips"></ol>
-        </section>
-
-        <h2>Messages</h2>
-        <ol id="log" class="log" aria-live="polite"></ol>
-
-        <details class="help">
-          <summary>Commands</summary>
-          <table>
-            <tr><td><code>C 240</code></td><td>Turn to heading 240 (000 to 360; add L or R to force the turn)</td></tr>
-            <tr><td><code>C 3</code></td><td>Climb or descend to 3,000 ft (add X to expedite)</td></tr>
-            <tr><td><code>C PUNE</code></td><td>Direct to a fix; list several for a route: <code>C OSKAR LOTAV</code></td></tr>
-            <tr><td><code>S 210</code></td><td>Speed 210 kt</td></tr>
-            <tr><td><code>I 27</code></td><td>Cleared to intercept: joins the centreline by itself (up to 30°), holds altitude until established, then follows the glidepath. Runway in use, within 60° of its heading, at or below 3,000 ft</td></tr>
-            <tr><td><code>L 27</code></td><td>Cleared to land. Given after <code>I</code>, it must come by 4 nm out or the aircraft goes around. Given first, it covers the approach too</td></tr>
-            <tr><td><code>W</code></td><td>Line up and wait (<code>W 32</code> to use another runway)</td></tr>
-            <tr><td><code>T</code></td><td>Cleared for takeoff (<code>T 32</code> for another runway)</td></tr>
-            <tr><td><code>H</code></td><td>Hold at present position; <code>H OSKAR</code> holds at a fix. Right turns, 1-minute legs; add <code>L</code> for left turns</td></tr>
-            <tr><td><code>A</code></td><td>Go around (or cancel a landing clearance not yet on final)</td></tr>
-          </table>
-          <p>
-            Chain clauses: <code>IGO451 C PUNE C 11 T</code>. Departures wait at their runway until you line them up
-            (<code>W</code>) or clear them for takeoff (<code>T</code>); they must leave through their exit fix (amber
-            ring when selected) at or above the strip's altitude. Keep aircraft 3 nm or 1,000 ft apart: orange means a conflict is
-            predicted within a minute, red means separation is lost. Wind decides which runways are in use: more
-            than 5 kt of tailwind and a runway closes. Session seed <span id="seed"></span>.
-          </p>
-        </details>
-        <p class="version">ATC Simulator <span id="version">0.8.0</span></p>
+        <footer class="speed-bar">
+          <label for="speed">Speed</label>
+          <input id="speed" type="range" min="0" max="6" step="1" value="1" />
+          <output id="speed-out" for="speed">1×</output>
+        </footer>
       </aside>
     </main>
 
     <main class="console" id="ground-console" hidden>
+      <nav class="rail" aria-label="Game controls">
+        <button id="g-menu-btn" type="button" class="rail-btn" title="Main menu (ends the session)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/><path d="M9 12h11"/></svg><span>Menu</span></button>
+        <button id="g-new" type="button" class="rail-btn" title="Restart: same airport and settings, new traffic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg><span>Restart</span></button>
+        <div class="rail-score" id="g-score-box" tabindex="0" aria-describedby="g-stats">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8v6a4 4 0 0 1-8 0z"/><path d="M8 6H5a3 3 0 0 0 3 4"/><path d="M16 6h3a3 3 0 0 1-3 4"/><path d="M12 14v4"/><path d="M8 20h8"/></svg><span id="g-score">0</span>
+          <dl id="g-stats" class="stats score-pop" role="tooltip"></dl>
+        </div>
+        <button id="g-settings" type="button" class="rail-btn rail-end" title="Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/></svg><span>Settings</span></button>
+      </nav>
       <section class="scope" aria-label="Ground radar">
         <div class="view">
           <canvas id="g-radar"></canvas>
@@ -187,34 +184,15 @@
       </section>
 
       <aside class="panel">
-        <header class="session">
-          <button id="g-menu-btn" type="button" class="menu-btn" aria-label="Main menu">&#8592; Menu</button>
-          <div class="session-info">
-            <div id="g-session-airport" class="session-airport">--</div>
-            <div id="g-session-meta" class="session-meta">--</div>
-          </div>
-        </header>
-        <div class="files">
-          <button id="g-new" type="button" class="link" title="Same airport and settings, new traffic">Restart</button>
-          <button id="g-settings" type="button" class="settings-btn" aria-label="Settings">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.6 7.6 0 0 0 0 2l-2.2 1.6 2 3.5 2.5-1a7.4 7.4 0 0 0 1.7 1l.4 2.6h4l.4-2.6a7.4 7.4 0 0 0 1.7-1l2.5 1 2-3.5zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)"/></svg>
-            Settings
-          </button>
-        </div>
-
-        <div class="clock-row">
-          <div>
+        <header class="status">
+          <div class="status-time">
             <div id="g-clock" class="clock">00:00:00</div>
-            <div id="g-rate" class="rate">1× real time</div>
+            <div id="g-rate" class="rate">paused</div>
           </div>
           <figure class="wind" aria-label="Wind">
-            <svg viewBox="-50 -50 100 100" width="84" height="84" aria-hidden="true">
+            <svg viewBox="-50 -50 100 100" width="46" height="46" aria-hidden="true">
               <circle r="40" class="dial-face" />
               <g id="g-dial-ticks"></g>
-              <text y="-43" class="dial-label">N</text>
-              <text x="46" y="3.5" class="dial-label">E</text>
-              <text y="50" class="dial-label">S</text>
-              <text x="-46" y="3.5" class="dial-label">W</text>
               <g id="g-wind-arrow">
                 <line y1="-36" y2="18" class="dial-arrow" />
                 <path d="M0 26 L-6 14 L6 14 Z" class="dial-head" />
@@ -223,51 +201,51 @@
             </svg>
             <figcaption>
               <div id="g-wind" class="wind-text">---° -- kt</div>
-              <div id="g-runway" class="in-use">Runway in use: --</div>
+              <div id="g-runway" class="in-use">In use: --</div>
             </figcaption>
           </figure>
+        </header>
+        <div class="session-line"><span id="g-session-airport" class="session-airport">--</span> <span id="g-session-meta" class="session-meta">--</span></div>
+
+        <div class="panel-scroll">
+          <section class="bay" aria-labelledby="g-dep-h">
+            <h2 id="g-dep-h">Departures <span id="g-dep-count" class="count"></span></h2>
+            <ol id="g-departures" class="strips"></ol>
+          </section>
+          <section class="bay" aria-labelledby="g-arr-h">
+            <h2 id="g-arr-h">Arrivals <span id="g-arr-count" class="count"></span></h2>
+            <ol id="g-arrivals" class="strips"></ol>
+          </section>
+
+          <details class="msgs" open>
+            <summary>Messages</summary>
+            <ol id="g-log" class="log" aria-live="polite"></ol>
+          </details>
+          <details class="help">
+            <summary>Ground commands</summary>
+            <table>
+              <tr><td><code>PUSH E</code></td><td>Push back from the stand, ending up facing east (or W, N, S where the apron allows)</td></tr>
+              <tr><td><code>TAXI A5</code></td><td>Taxi to holding point A5 by the shortest allowed route; <code>TAXI A5 VIA A</code> follows taxiway A. Arrivals: <code>TAXI S3</code> to their stand</td></tr>
+              <tr><td><code>HOLD</code></td><td>Hold position; <code>CONT</code> to continue</td></tr>
+              <tr><td><code>CROSS</code></td><td>Ask the tower to cross the runway ahead; the aircraft holds short until the tower approves</td></tr>
+            </table>
+            <p>
+              Or select an aircraft and use the buttons over the map: <em>Click a route</em> lets you click points on the
+              taxiways in order and shows the route before you send it. You are the ground controller: the tower lines up
+              and launches departures waiting at the holding point of the runway in use, lands arrivals and turns them off
+              the runway; you take them to their stand. Keep aircraft apart: closer than 40 m is a conflict (-20).
+              Departure airborne +10, arrival on stand +10, go-around -5. Runway 27 departures hold at A5, 09 at A1;
+              cargo stands are south of the runway, so cargo traffic has to cross it.
+            </p>
+          </details>
+          <p class="version">ATC Simulator <span class="version-number">0.9.0</span></p>
         </div>
 
-        <div class="speed speed-5" role="group" aria-label="Simulation speed">
-          <button type="button" data-gspeed="0" aria-pressed="false">Pause</button>
-          <button type="button" data-gspeed="1" aria-pressed="true">1×</button>
-          <button type="button" data-gspeed="2" aria-pressed="false">2×</button>
-          <button type="button" data-gspeed="4" aria-pressed="false">4×</button>
-          <button type="button" data-gspeed="8" aria-pressed="false">8×</button>
-        </div>
-
-        <dl id="g-stats" class="stats"></dl>
-
-        <section class="bay" aria-labelledby="g-dep-h">
-          <h2 id="g-dep-h">Departures <span id="g-dep-count" class="count"></span></h2>
-          <ol id="g-departures" class="strips"></ol>
-        </section>
-        <section class="bay" aria-labelledby="g-arr-h">
-          <h2 id="g-arr-h">Arrivals <span id="g-arr-count" class="count"></span></h2>
-          <ol id="g-arrivals" class="strips"></ol>
-        </section>
-
-        <h2>Messages</h2>
-        <ol id="g-log" class="log" aria-live="polite"></ol>
-
-        <details class="help">
-          <summary>Ground commands</summary>
-          <table>
-            <tr><td><code>PUSH E</code></td><td>Push back from the stand, ending up facing east (or W, N, S where the apron allows)</td></tr>
-            <tr><td><code>TAXI A5</code></td><td>Taxi to holding point A5 by the shortest allowed route; <code>TAXI A5 VIA A</code> follows taxiway A. Arrivals: <code>TAXI S3</code> to their stand</td></tr>
-            <tr><td><code>HOLD</code></td><td>Hold position; <code>CONT</code> to continue</td></tr>
-            <tr><td><code>CROSS</code></td><td>Ask the tower to cross the runway ahead; the aircraft holds short until the tower approves</td></tr>
-          </table>
-          <p>
-            Or select an aircraft and use the buttons over the map: <em>Click a route</em> lets you click points on the
-            taxiways in order and shows the route before you send it. You are the ground controller: the tower lines up
-            and launches departures waiting at the holding point of the runway in use, lands arrivals and turns them off
-            the runway; you take them to their stand. Keep aircraft apart: closer than 40 m is a conflict (-20).
-            Departure airborne +10, arrival on stand +10, go-around -5. Runway 27 departures hold at A5, 09 at A1;
-            cargo stands are south of the runway, so cargo traffic has to cross it.
-          </p>
-        </details>
-        <p class="version">ATC Simulator <span class="version-number">0.8.0</span></p>
+        <footer class="speed-bar">
+          <label for="g-speed">Speed</label>
+          <input id="g-speed" type="range" min="0" max="4" step="1" value="1" />
+          <output id="g-speed-out" for="g-speed">1×</output>
+        </footer>
       </aside>
     </main>
     <!-- Shared by both modes, so it lives outside the consoles. -->

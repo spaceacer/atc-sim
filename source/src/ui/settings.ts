@@ -37,7 +37,7 @@ export interface Settings {
 export const DEFAULT_SETTINGS: Settings = {
   labelSize: 'normal',
   trail: 'short',
-  leaderSec: 60,
+  leaderSec: 30,
   rangeRings: false,
   fixNames: true,
   arrivals: 'normal',
@@ -136,11 +136,21 @@ const GROUPS: readonly Group[] = [
 ];
 
 const STORAGE_KEY = 'atc-sim-settings';
+const LEADER_MIGRATED = 'atc-sim-leader-30';
 
 export function loadSettings(): Settings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return sanitize(JSON.parse(raw));
+    if (raw) {
+      const s = sanitize(JSON.parse(raw));
+      // 0.9.0 shortened the default leader line from 60 s to 30 s; move stored defaults along once.
+      if (localStorage.getItem(LEADER_MIGRATED) === null) {
+        if (s.leaderSec === 60) s.leaderSec = 30;
+        localStorage.setItem(LEADER_MIGRATED, '1');
+        saveSettings(s);
+      }
+      return s;
+    }
   } catch {
     // Storage blocked or corrupt: defaults.
   }

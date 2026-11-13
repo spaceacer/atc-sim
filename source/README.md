@@ -6,7 +6,7 @@ Two modes: **Approach radar** (vector, sequence and clear arrivals and
 departures) and **Ground** (push back, taxi and hold aircraft on a practice
 airport while the tower and the airborne traffic run automatically).
 
-**Version 0.8.0.** The project follows Semantic Versioning (`MAJOR.MINOR.PATCH`);
+**Version 0.9.0.** The project follows Semantic Versioning (`MAJOR.MINOR.PATCH`);
 what changed in each release is in [CHANGELOG.md](CHANGELOG.md).
 
 In the approach mode, arrivals enter from any edge of a rectangular airspace at
@@ -22,14 +22,25 @@ and a single-runway practice field.
 ## Play
 
 **No install:** play at <https://spaceacer.github.io/atc-sim/>, or double-click
-`ATC-Sim-0.8.0.html` (everything is inside that one file).
+`ATC-Sim-0.9.0.html` (everything is inside that one file).
 
 The game opens on the **main menu**: pick the airport, the position
 (**Approach radar** or **Ground**, where the airport offers it) and the
 difficulty, then **Start session**. Airport, position and difficulty are fixed
-for the session; **Menu** in the panel (or the browser's Back button) pauses
-and offers to save before returning to the menu. **Restart** keeps the same
-choices with new traffic.
+for the session.
+
+In a session, the icon rail on the left holds **Menu** (or the browser's Back
+button: pauses and offers to save before returning to the menu), **Save**,
+**Restart** (same choices, new traffic), the **score** (hover or focus it for
+the breakdown; it flashes red after a penalty) and **Settings**. The panel on
+the right shows the clock and wind, then the arrival and departure strips,
+messages and the command help; the **speed slider** (pause, 1× to 16×, Max)
+sits at its foot.
+
+Data blocks place themselves around their aircraft to avoid other blocks,
+aircraft, runways and fixes, with a thin line to the blip when moved away.
+Drag a block to put it somewhere else; double-click it to hand it back to
+automatic placement.
 
 **From source:**
 
@@ -140,7 +151,7 @@ choices are remembered in the browser when it allows storage.
 **Settings** (the gear button, in both modes) holds what applies at once:
 
 - **Scope display:** label size, history trail (off, 24 s, 60 s), leader line
-  (off, 30 s, 60 s, 2 min), range rings every 10 nm, fix names.
+  (off, 30 s default, 60 s, 2 min), range rings every 10 nm, fix names.
 - **Assistance:** conflict alerts on or off, pause on a separation loss or a
   go-around, sound alerts, and **helper buttons** (both modes): turn them off
   to type every instruction yourself (ground mode keeps the button for
@@ -208,7 +219,9 @@ Vapp (final approach speed), touchdown speed (Vapp - 5 kt), lift-off speed
 (V2 - 5 kt), takeoff acceleration (from V2 and the takeoff distance, ground
 roll taken as 85% of it), rollout braking (from the landing distance less 300 m
 in the air, times 1.4 for normal rather than maximum braking), climb and
-descent rates, and the speed range ATC may assign (from Vapp + 25 kt).
+descent rates (descents capped at 2,000 ft/min; vertical speed builds up over
+about 8 s and eases off near the cleared level; expedite is 1.5 times the
+normal rate, at most 3,000 ft/min), and the speed range ATC may assign (from Vapp + 25 kt).
 
 | Type | Aircraft | Vapp kt | V2 kt | Takeoff m | Landing m | Climb ft/min | Sources |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
@@ -247,7 +260,7 @@ every command with its tick. **Load saved session or scenario** (main menu) repl
 to the saved moment (paused), reproducing the exact state. A scenario file is the same
 format with no commands; examples are in `scenarios/`. Files record the simulator version that saved them
 (`appVersion`). Saving does not work inside the hosted claude.ai
-page (downloads are blocked there); use `ATC-Sim-0.8.0.html` or `npm run dev`.
+page (downloads are blocked there); use `ATC-Sim-0.9.0.html` or `npm run dev`.
 
 ## Python and AI training
 
