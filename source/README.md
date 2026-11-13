@@ -6,7 +6,7 @@ Two modes: **Approach radar** (vector, sequence and clear arrivals and
 departures) and **Ground** (push back, taxi and hold aircraft on a practice
 airport while the tower and the airborne traffic run automatically).
 
-**Version 0.10.0.** The project follows Semantic Versioning (`MAJOR.MINOR.PATCH`);
+**Version 0.10.1.** The project follows Semantic Versioning (`MAJOR.MINOR.PATCH`);
 what changed in each release is in [CHANGELOG.md](CHANGELOG.md).
 
 In the approach mode, arrivals enter from any edge of a rectangular airspace at
@@ -22,7 +22,7 @@ and a single-runway practice field.
 ## Play
 
 **No install:** play at <https://spaceacer.github.io/atc-sim/>, or double-click
-`ATC-Sim-0.10.0.html` (everything is inside that one file).
+`ATC-Sim-0.10.1.html` (everything is inside that one file).
 
 The game opens on the **main menu**: pick the airport, the position
 (**Approach radar** or **Ground**, where the airport offers it) and the
@@ -150,9 +150,10 @@ choices are remembered in the browser when it allows storage.
 
 **Settings** (the gear button, in both modes) holds what applies at once:
 
-- **Scope display:** label size, trails (on or off; 24 s, 1 min or 2 min;
-  coloured by altitude, as on Flightradar24, with a legend, or grey dots), leader line
-  (off, 30 s default, 60 s, 2 min), range rings every 10 nm, fix names.
+- **Scope display:** label size, trails (on or off; for all aircraft or the
+  selected one only; 24 s, 1 min or 2 min; coloured by altitude, as on
+  Flightradar24, or grey dots; the altitude legend shows only while a coloured
+  trail is on the scope), heading line (off, 10 s default, 20 s, 30 s, 1 min, 2 min), range rings every 10 nm, fix names.
 - **Assistance:** conflict alerts on or off, pause on a separation loss or a
   go-around, sound alerts, and **helper buttons** (both modes): turn them off
   to type every instruction yourself (ground mode keeps the button for
@@ -261,7 +262,7 @@ every command with its tick. **Load saved session or scenario** (main menu) repl
 to the saved moment (paused), reproducing the exact state. A scenario file is the same
 format with no commands; examples are in `scenarios/`. Files record the simulator version that saved them
 (`appVersion`). Saving does not work inside the hosted claude.ai
-page (downloads are blocked there); use `ATC-Sim-0.10.0.html` or `npm run dev`.
+page (downloads are blocked there); use `ATC-Sim-0.10.1.html` or `npm run dev`.
 
 ## Python and AI training
 

@@ -9,6 +9,18 @@ While the major version is 0, a minor release may also change behaviour that
 saved sessions or trained agents rely on; such changes are listed under
 **Changed**.
 
+## 0.10.1 - 2026-11-13
+
+### Changed
+- The trail altitude legend appears only while a coloured trail is on the
+  scope.
+- Heading (leader) line: default 10 s of flight (was 30 s), with 10 s and
+  20 s added to Off, 30 s, 1 min and 2 min in Settings. A stored 30 s or 60 s
+  setting moves to 10 s once.
+
+### Added
+- Settings > *Trails for*: all aircraft, or the selected aircraft only.
+
 ## 0.10.0 - 2026-11-13
 
 ### Added

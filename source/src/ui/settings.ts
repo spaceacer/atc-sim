@@ -11,6 +11,7 @@ import { DEFAULT_DISPLAY, type RadarDisplay } from './radar.js';
 export interface Settings {
   labelSize: 'small' | 'normal' | 'large';
   showTrails: boolean;
+  trailsFor: 'all' | 'selected';
   trail: 'short' | 'long' | 'longer';
   trailByAltitude: boolean;
   leaderSec: number;
@@ -39,9 +40,10 @@ export interface Settings {
 export const DEFAULT_SETTINGS: Settings = {
   labelSize: 'normal',
   showTrails: true,
+  trailsFor: 'all',
   trail: 'long',
   trailByAltitude: true,
-  leaderSec: 30,
+  leaderSec: 10,
   rangeRings: false,
   fixNames: true,
   arrivals: 'normal',
@@ -88,9 +90,15 @@ const GROUPS: readonly Group[] = [
     fields: [
       { key: 'labelSize', label: 'Label size', choices: [['small', 'Small'], ['normal', 'Normal'], ['large', 'Large']] },
       { key: 'showTrails', label: 'Show trails' },
+      { key: 'trailsFor', label: 'Trails for', choices: [['all', 'All aircraft'], ['selected', 'Selected aircraft only']] },
       { key: 'trail', label: 'Trail length', choices: [['short', '24 s'], ['long', '1 min'], ['longer', '2 min']] },
       { key: 'trailByAltitude', label: 'Colour trails by altitude', hint: 'Orange low, through yellow, green and blue, to violet at 15,000 ft and above.' },
-      { key: 'leaderSec', label: 'Leader line', choices: [['0', 'Off'], ['30', '30 s'], ['60', '60 s'], ['120', '2 min']] },
+      {
+        key: 'leaderSec',
+        label: 'Heading line',
+        choices: [['0', 'Off'], ['10', '10 s'], ['20', '20 s'], ['30', '30 s'], ['60', '1 min'], ['120', '2 min']],
+        hint: 'How far ahead each aircraft\'s line points, in seconds of flight on its current heading.',
+      },
       { key: 'rangeRings', label: 'Range rings every 10 nm' },
       { key: 'fixNames', label: 'Fix names' },
     ],
@@ -142,7 +150,7 @@ const GROUPS: readonly Group[] = [
 ];
 
 const STORAGE_KEY = 'atc-sim-settings';
-const LEADER_MIGRATED = 'atc-sim-leader-30';
+const LEADER_MIGRATED = 'atc-sim-leader-10';
 
 export function loadSettings(): Settings {
   try {
@@ -152,9 +160,9 @@ export function loadSettings(): Settings {
       const s = sanitize(parsed);
       // Before 0.10.0, trails were switched off with trail: 'off'.
       if (parsed && typeof parsed === 'object' && (parsed as { trail?: unknown }).trail === 'off') s.showTrails = false;
-      // 0.9.0 shortened the default leader line from 60 s to 30 s; move stored defaults along once.
+      // The default heading line went from 60 s to 30 s (0.9.0), then to 10 s (0.10.1); move stored defaults along once.
       if (localStorage.getItem(LEADER_MIGRATED) === null) {
-        if (s.leaderSec === 60) s.leaderSec = 30;
+        if (s.leaderSec === 60 || s.leaderSec === 30) s.leaderSec = 10;
         localStorage.setItem(LEADER_MIGRATED, '1');
         saveSettings(s);
       }
@@ -236,6 +244,7 @@ export function radarDisplayFor(s: Settings): RadarDisplay {
     fixNames: s.fixNames,
     conflictAlerts: s.conflictAlerts,
     trailColours: s.showTrails && s.trailByAltitude,
+    trailsSelectedOnly: s.trailsFor === 'selected',
   };
 }
 

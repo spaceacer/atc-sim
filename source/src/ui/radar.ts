@@ -37,9 +37,10 @@ export interface RadarDisplay {
   fixNames: boolean;
   conflictAlerts: boolean; // show predicted conflicts in orange
   trailColours: boolean; // trails coloured by altitude, with a legend
+  trailsSelectedOnly: boolean; // draw the trail of the selected aircraft only
 }
 
-export const DEFAULT_DISPLAY: RadarDisplay = { labelPx: 11, leaderSec: 30, rangeRings: false, fixNames: true, conflictAlerts: true, trailColours: true };
+export const DEFAULT_DISPLAY: RadarDisplay = { labelPx: 11, leaderSec: 10, rangeRings: false, fixNames: true, conflictAlerts: true, trailColours: true, trailsSelectedOnly: false };
 const BLIP_HIT_PX = 14;
 
 export interface Prev {
@@ -257,11 +258,42 @@ export class Radar {
     const offsets = this.placeLabels(shown, selectedId);
 
     // Draw the selected aircraft last so its block sits on top.
+    const trailOf = (id: number) => (this.display.trailsSelectedOnly && id !== selectedId ? undefined : trails.get(id));
+    let trailShown = false;
     for (const s of shown) {
-      if (s.ac.id !== selectedId) this.drawAircraft(s.ac, s.x, s.y, false, trails.get(s.ac.id), s.lines, offsets.get(s.ac.id));
+      if (s.ac.id === selectedId) continue;
+      const t = trailOf(s.ac.id);
+      if (t && t.points.length > 0) trailShown = true;
+      this.drawAircraft(s.ac, s.x, s.y, false, t, s.lines, offsets.get(s.ac.id));
     }
     const sel = shown.find((s) => s.ac.id === selectedId);
-    if (sel) this.drawAircraft(sel.ac, sel.x, sel.y, true, trails.get(sel.ac.id), sel.lines, offsets.get(sel.ac.id));
+    if (sel) {
+      const t = trailOf(sel.ac.id);
+      if (t && t.points.length > 0) trailShown = true;
+      this.drawAircraft(sel.ac, sel.x, sel.y, true, t, sel.lines, offsets.get(sel.ac.id));
+    }
+    // The altitude legend appears only while a coloured trail is on the scope.
+    if (trailShown && this.display.trailColours) this.drawAltitudeLegend();
+  }
+
+  /** Altitude colour key, top left under the airport name. */
+  private drawAltitudeLegend(): void {
+    const ctx = this.ctx;
+    const { halfWidth: hw, halfHeight: hh } = this.airport.boundary;
+    const lw = 120;
+    const lx = this.sx(-hw) + 12;
+    const ly = this.sy(hh) + 28;
+    for (let i = 0; i < lw; i++) {
+      ctx.fillStyle = altitudeColour((i / (lw - 1)) * 15000);
+      ctx.fillRect(lx + i, ly, 1, 4);
+    }
+    ctx.font = `10px ${FONT}`;
+    ctx.fillStyle = COLORS.scale;
+    ctx.textBaseline = 'alphabetic';
+    ctx.textAlign = 'center';
+    [0, 5, 10, 15].forEach((k) => ctx.fillText(String(k), lx + (k / 15) * lw, ly + 15));
+    ctx.textAlign = 'left';
+    ctx.fillText('thousand ft', lx + lw + 8, ly + 6);
   }
 
   /**
@@ -473,24 +505,6 @@ export class Radar {
     ctx.textBaseline = 'alphabetic';
     ctx.fillText(`${barNm} nm`, bx + barNm * this.scale + 6, by + 1);
 
-    // Altitude colour legend for trails, top left under the airport name.
-    if (this.display.trailColours) {
-      const lw = 120;
-      const lx = left + 12;
-      const ly = top + 28;
-      for (let i = 0; i < lw; i++) {
-        ctx.fillStyle = altitudeColour((i / (lw - 1)) * 15000);
-        ctx.fillRect(lx + i, ly, 1, 4);
-      }
-      ctx.font = `10px ${FONT}`;
-      ctx.fillStyle = COLORS.scale;
-      ctx.textBaseline = 'alphabetic';
-      ctx.textAlign = 'center';
-      [0, 5, 10, 15].forEach((k) => ctx.fillText(String(k), lx + (k / 15) * lw, ly + 15));
-      ctx.textAlign = 'left';
-      ctx.fillText('thousand ft', lx + lw + 8, ly + 6);
-    }
-
     // Airport name, top left.
     ctx.font = `600 11px ${FONT}`;
     ctx.fillText(`${this.airport.icao}  ${this.airport.city.toUpperCase()}`, left + 12, top + 18);
@@ -669,7 +683,7 @@ export class Radar {
       ctx.globalAlpha = 1;
     }
 
-    // Leader line: where it will be in 60 s on the current heading.
+    // Heading line: where it will be after leaderSec on the current heading.
     if (this.display.leaderSec > 0 && (ac.status === 'airborne' || ac.status === 'rolling' || ac.status === 'rollout')) {
       const { dx, dy } = headingVector(ac.heading);
       const lead = (Math.max(ac.speed, 60) / 3600) * this.display.leaderSec;
