@@ -132,9 +132,11 @@ function stateText(ac: Aircraft, inUse: readonly string[]): string {
     case 'waiting':
       return ac.runway && !inUse.includes(ac.runway) ? `${ac.runway} closed` : `Holding short ${ac.runway}`;
     case 'lineup':
+      if (ac.aborting) return `Vacating ${ac.runway}, ${Math.ceil(ac.groundSec)} s`;
+      if (ac.groundSec > 0) return `Lining up ${ac.runway}${ac.takeoffCleared ? ', cleared' : ''}, ${Math.ceil(ac.groundSec)} s`;
       return `Lined up ${ac.runway}`;
     case 'rolling':
-      return `Rolling ${ac.runway}`;
+      return ac.aborting ? `Rejecting takeoff ${ac.runway}` : `Rolling ${ac.runway}`;
     case 'rollout':
       return `Landed, slowing ${ac.runway}`;
     default:

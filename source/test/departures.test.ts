@@ -35,6 +35,9 @@ test('takeoff roll, lift-off at rotate speed, runway heading until 500 ft', () =
   const ac = departure(sim);
   sim.command({ type: 'heading', callsign: 'DEP1', heading: 360 });
   assert.equal(sim.command({ type: 'takeoff', callsign: 'DEP1' }).ok, true);
+  assert.equal(ac.status, 'lineup', 'lines up first');
+  assert.equal(ac.groundSec, 25, 'A320: 35 s line-up, 10 s quicker as a rolling start');
+  runUntil(sim, 30, () => ac.status === 'rolling');
   assert.equal(ac.status, 'rolling');
   const events = runUntil(sim, 120, () => ac.status === 'airborne');
   assert.ok(events.includes('tookOff'));
@@ -44,6 +47,51 @@ test('takeoff roll, lift-off at rotate speed, runway heading until 500 ft', () =
   assert.equal(ac.heading, 270, 'no turn below 500 ft');
   sim.run(ticks(60, sim));
   assert.equal(ac.heading, 360, 'turned to the assigned heading after 500 ft');
+});
+
+test('line up and wait takes time; a takeoff clearance while lining up rolls once lined up', () => {
+  const sim = emptySim();
+  const ac = departure(sim);
+  assert.equal(sim.command({ type: 'lineUp', callsign: 'DEP1' }).ok, true);
+  assert.equal(ac.groundSec, 35);
+  sim.run(ticks(20, sim));
+  assert.equal(ac.status, 'lineup');
+  assert.match(sim.command({ type: 'lineUp', callsign: 'DEP1' }).message, /already lining up/);
+  assert.equal(sim.command({ type: 'takeoff', callsign: 'DEP1' }).ok, true);
+  assert.equal(ac.status, 'lineup', 'still lining up');
+  const events = runUntil(sim, 20, () => ac.status === 'rolling');
+  assert.equal(ac.status, 'rolling');
+  assert.ok(!events.includes('linedUp'), 'cleared for takeoff: no stop once lined up');
+});
+
+test('A rejects a takeoff below V1, refuses above it, and cancels a line-up', () => {
+  const sim = emptySim();
+  const ac = departure(sim);
+  sim.command({ type: 'takeoff', callsign: 'DEP1' });
+  runUntil(sim, 40, () => ac.status === 'rolling' && ac.speed > 60);
+  const r = sim.command({ type: 'goAround', callsign: 'DEP1' });
+  assert.equal(r.ok, true, r.message);
+  assert.match(r.message, /stop immediately/);
+  runUntil(sim, 60, () => ac.speed === 0);
+  assert.equal(ac.status, 'lineup', 'stopped on the runway, vacating');
+  assert.ok(ac.aborting);
+  assert.match(sim.command({ type: 'takeoff', callsign: 'DEP1' }).message, /vacating/);
+  const events = runUntil(sim, 60, () => ac.status === 'waiting');
+  assert.ok(events.includes('vacated'));
+  assert.equal(ac.status, 'waiting', 'back at the holding point');
+
+  // Past V1 the takeoff continues.
+  sim.command({ type: 'takeoff', callsign: 'DEP1' });
+  runUntil(sim, 120, () => ac.status === 'rolling' && ac.speed >= 135);
+  assert.match(sim.command({ type: 'goAround', callsign: 'DEP1' }).message, /past V1/);
+
+  // Cancel a line-up.
+  const sim2 = emptySim();
+  const ac2 = departure(sim2);
+  sim2.command({ type: 'lineUp', callsign: 'DEP1' });
+  assert.match(sim2.command({ type: 'goAround', callsign: 'DEP1' }).message, /cancel line-up/);
+  runUntil(sim2, 60, () => ac2.status === 'waiting');
+  assert.equal(ac2.status, 'waiting');
 });
 
 test('leaving through the assigned exit fix high enough scores', () => {

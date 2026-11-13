@@ -3,8 +3,8 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="version" content="0.9.0" />
-    <title>ATC Simulator 0.9.0</title>
+    <meta name="version" content="0.10.0" />
+    <title>ATC Simulator 0.10.0</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -19,7 +19,7 @@
         <div class="wordmark">
           <span class="wordmark-dot" aria-hidden="true"></span>
           <h1>ATC Simulator</h1>
-          <span class="wordmark-version">v<span id="menu-version">0.9.0</span></span>
+          <span class="wordmark-version">v<span id="menu-version">0.10.0</span></span>
         </div>
         <button id="menu-help" type="button" class="m-link">How to play</button>
       </header>
@@ -140,7 +140,7 @@
               <tr><td><code>W</code></td><td>Line up and wait (<code>W 32</code> to use another runway)</td></tr>
               <tr><td><code>T</code></td><td>Cleared for takeoff (<code>T 32</code> for another runway)</td></tr>
               <tr><td><code>H</code></td><td>Hold at present position; <code>H OSKAR</code> holds at a fix. Right turns, 1-minute legs; add <code>L</code> for left turns</td></tr>
-              <tr><td><code>A</code></td><td>Go around (or cancel a landing clearance not yet on final)</td></tr>
+              <tr><td><code>A</code></td><td>Go around (or cancel a landing clearance not yet on final). Departures: cancel a line-up, or abort the takeoff below V1</td></tr>
             </table>
             <p>
               Chain clauses: <code>IGO451 C PUNE C 11 T</code>. Departures wait at their runway until you line them up
@@ -150,7 +150,7 @@
               than 5 kt of tailwind and a runway closes. Session seed <span id="seed"></span>.
             </p>
           </details>
-          <p class="version">ATC Simulator <span id="version">0.9.0</span></p>
+          <p class="version">ATC Simulator <span id="version">0.10.0</span></p>
         </div>
 
         <footer class="speed-bar">
@@ -238,7 +238,7 @@
               cargo stands are south of the runway, so cargo traffic has to cross it.
             </p>
           </details>
-          <p class="version">ATC Simulator <span class="version-number">0.9.0</span></p>
+          <p class="version">ATC Simulator <span class="version-number">0.10.0</span></p>
         </div>
 
         <footer class="speed-bar">
@@ -277,7 +277,7 @@
             <tr><td><code>S 210</code></td><td>Speed 210 kt</td></tr>
             <tr><td><code>I 27</code> / <code>L 27</code></td><td>Intercept / cleared to land runway 27</td></tr>
             <tr><td><code>W</code> / <code>T</code></td><td>Line up and wait / cleared for takeoff</td></tr>
-            <tr><td><code>H</code> / <code>A</code></td><td>Hold / go around</td></tr>
+            <tr><td><code>H</code> / <code>A</code></td><td>Hold / go around, or abort a takeoff</td></tr>
           </table>
           <p>Keep aircraft 3 nm or 1,000 ft apart. Orange: a conflict is predicted within a minute. Red: separation is lost.</p>
         </section>

@@ -1498,3 +1498,18 @@ code {
     grid-column: 1 / -1;
   }
 }
+
+.rail-score.flash-good {
+  animation: score-flash-good 1.6s ease-out;
+}
+
+@keyframes score-flash-good {
+  0%,
+  40% {
+    background: #2e9e62;
+    color: #fff;
+  }
+  100% {
+    background: transparent;
+  }
+}

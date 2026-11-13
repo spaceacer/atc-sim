@@ -411,7 +411,7 @@ export class Menu {
       view.render(sim.getState(), null, null, null);
     } else {
       const sim = new Simulation(makeScenario(1, this.map.id));
-      const radar = new Radar(this.canvas, a, { ...DEFAULT_DISPLAY, rangeRings: true, fixNames: true });
+      const radar = new Radar(this.canvas, a, { ...DEFAULT_DISPLAY, rangeRings: true, fixNames: true, trailColours: false });
       // Every runway's centreline, so the map shows the whole airport.
       radar.setRunwaysInUse(a.runways.map((r) => r.id));
       radar.render(sim.getState(), new Map(), 1, null, new Map());

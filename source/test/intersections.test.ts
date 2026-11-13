@@ -53,7 +53,7 @@ test('wake turbulence: a medium waits 2 min behind a heavy, 3 min from an inters
   departure(sim, 'IGO1', 'A20N');
   departure(sim, 'IGO2', 'AT76');
   assert.equal(sim.command({ type: 'takeoff', callsign: 'UAE1' }).ok, true);
-  sim.run(ticks(90, sim)); // the 777 is airborne, runway clear
+  sim.run(ticks(125, sim)); // 35 s to line up (rolling start), then airborne; runway clear
   const early = sim.command({ type: 'takeoff', callsign: 'IGO1' });
   assert.equal(early.ok, false);
   assert.match(early.message, /wake turbulence behind UAE1 \(B77W\), 30 s to wait/);

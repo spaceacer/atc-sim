@@ -36,9 +36,10 @@ export interface RadarDisplay {
   rangeRings: boolean; // every 10 nm around the airport
   fixNames: boolean;
   conflictAlerts: boolean; // show predicted conflicts in orange
+  trailColours: boolean; // trails coloured by altitude, with a legend
 }
 
-export const DEFAULT_DISPLAY: RadarDisplay = { labelPx: 11, leaderSec: 30, rangeRings: false, fixNames: true, conflictAlerts: true };
+export const DEFAULT_DISPLAY: RadarDisplay = { labelPx: 11, leaderSec: 30, rangeRings: false, fixNames: true, conflictAlerts: true, trailColours: true };
 const BLIP_HIT_PX = 14;
 
 export interface Prev {
@@ -47,7 +48,35 @@ export interface Prev {
 }
 
 export interface Trail {
-  points: { x: number; y: number }[];
+  points: { x: number; y: number; alt: number }[];
+}
+
+/** Altitude colour scale for trails, in the spirit of Flightradar24: warm low, cool high. */
+const ALT_STOPS: readonly [ft: number, rgb: readonly [number, number, number]][] = [
+  [0, [255, 138, 0]],
+  [2000, [255, 212, 0]],
+  [4000, [140, 224, 0]],
+  [6000, [0, 214, 143]],
+  [9000, [0, 184, 255]],
+  [12000, [61, 107, 255]],
+  [15000, [176, 77, 255]],
+];
+
+export function altitudeColour(ft: number): string {
+  if (ft <= ALT_STOPS[0][0]) return rgb(ALT_STOPS[0][1]);
+  for (let i = 1; i < ALT_STOPS.length; i++) {
+    const [f1, c1] = ALT_STOPS[i];
+    if (ft <= f1) {
+      const [f0, c0] = ALT_STOPS[i - 1];
+      const t = (ft - f0) / (f1 - f0);
+      return rgb([c0[0] + (c1[0] - c0[0]) * t, c0[1] + (c1[1] - c0[1]) * t, c0[2] + (c1[2] - c0[2]) * t]);
+    }
+  }
+  return rgb(ALT_STOPS[ALT_STOPS.length - 1][1]);
+}
+
+function rgb(c: readonly number[]): string {
+  return `rgb(${Math.round(c[0])}, ${Math.round(c[1])}, ${Math.round(c[2])})`;
 }
 
 interface Rect {
@@ -444,6 +473,24 @@ export class Radar {
     ctx.textBaseline = 'alphabetic';
     ctx.fillText(`${barNm} nm`, bx + barNm * this.scale + 6, by + 1);
 
+    // Altitude colour legend for trails, top left under the airport name.
+    if (this.display.trailColours) {
+      const lw = 120;
+      const lx = left + 12;
+      const ly = top + 28;
+      for (let i = 0; i < lw; i++) {
+        ctx.fillStyle = altitudeColour((i / (lw - 1)) * 15000);
+        ctx.fillRect(lx + i, ly, 1, 4);
+      }
+      ctx.font = `10px ${FONT}`;
+      ctx.fillStyle = COLORS.scale;
+      ctx.textBaseline = 'alphabetic';
+      ctx.textAlign = 'center';
+      [0, 5, 10, 15].forEach((k) => ctx.fillText(String(k), lx + (k / 15) * lw, ly + 15));
+      ctx.textAlign = 'left';
+      ctx.fillText('thousand ft', lx + lw + 8, ly + 6);
+    }
+
     // Airport name, top left.
     ctx.font = `600 11px ${FONT}`;
     ctx.fillText(`${this.airport.icao}  ${this.airport.city.toUpperCase()}`, left + 12, top + 18);
@@ -594,13 +641,31 @@ export class Radar {
           ? COLORS.selected
           : base;
 
-    // History trail.
-    if (trail) {
-      ctx.fillStyle = COLORS.trail;
-      trail.points.forEach((pt, i) => {
-        ctx.globalAlpha = 0.25 + (0.6 * (i + 1)) / trail.points.length;
-        ctx.fillRect(this.sx(pt.x) - 1, this.sy(pt.y) - 1, 2, 2);
-      });
+    // History trail: a line coloured by altitude, or the classic grey dots.
+    if (trail && trail.points.length > 0) {
+      const n = trail.points.length;
+      if (this.display.trailColours) {
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+        for (let i = 0; i < n; i++) {
+          const a = trail.points[i];
+          const b = i + 1 < n ? trail.points[i + 1] : { x, y, alt: ac.altitude };
+          ctx.globalAlpha = 0.3 + (0.6 * (i + 1)) / n; // older is fainter
+          ctx.strokeStyle = altitudeColour((a.alt + b.alt) / 2);
+          ctx.beginPath();
+          ctx.moveTo(this.sx(a.x), this.sy(a.y));
+          ctx.lineTo(this.sx(b.x), this.sy(b.y));
+          ctx.stroke();
+        }
+        ctx.lineCap = 'butt';
+        ctx.lineWidth = 1;
+      } else {
+        ctx.fillStyle = COLORS.trail;
+        trail.points.forEach((pt, i) => {
+          ctx.globalAlpha = 0.25 + (0.6 * (i + 1)) / n;
+          ctx.fillRect(this.sx(pt.x) - 1, this.sy(pt.y) - 1, 2, 2);
+        });
+      }
       ctx.globalAlpha = 1;
     }
 
@@ -709,7 +774,8 @@ function altitudeLine(ac: Aircraft): string {
   const alt = pad3(Math.round(ac.altitude / 100));
   const diff = ac.targetAltitude - ac.altitude;
   const spd = String(Math.round(ac.speed / 10)).padStart(2, '0');
-  if (ac.status === 'lineup') return `${alt} LUAW`;
+  if (ac.status === 'lineup') return `${alt} ${ac.aborting ? 'VACATE' : ac.groundSec > 0 ? 'LINING' : 'LUAW'}`;
+  if (ac.status === 'rolling' && ac.aborting) return `${alt} STOP`;
   if (ac.status === 'rollout') return `${alt} ${String(Math.round(ac.speed / 10)).padStart(2, '0')}`;
   if (Math.abs(diff) < 50) return `${alt} ${spd}`;
   return `${alt}${diff > 0 ? '↑' : '↓'}${pad3(Math.round(ac.targetAltitude / 100))} ${spd}`;

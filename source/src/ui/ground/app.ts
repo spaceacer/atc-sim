@@ -438,6 +438,14 @@ export class GroundApp {
     this.setSpeed(0);
   }
 
+  /** Pulse the score button: green for points won, red for a penalty. */
+  private flash(kind: 'good' | 'bad'): void {
+    const box = this.el.scoreBox;
+    box.classList.remove('flash', 'flash-good');
+    void box.offsetWidth;
+    box.classList.add(kind === 'good' ? 'flash-good' : 'flash');
+  }
+
   /** Settings changed: rebuild the action buttons. */
   refresh(): void {
     this.lastActionsKey = '';
@@ -507,6 +515,7 @@ export class GroundApp {
           break;
         case 'departed':
           this.logMsg(`${e.callsign} airborne from ${e.runway}, taxi-out ${Math.round(e.taxiSec / 60)} min`, 'ok');
+          this.flash('good');
           break;
         case 'touchdown':
           this.logMsg(`${e.callsign} landed ${e.runway}, vacating at ${e.exit}`);
@@ -516,15 +525,15 @@ export class GroundApp {
           break;
         case 'parked':
           this.logMsg(`${e.callsign} on stand ${e.stand}, taxi-in ${Math.round(e.taxiSec / 60)} min`, 'ok');
+          this.flash('good');
           break;
         case 'goAround':
           this.logMsg(`${e.callsign} going around: ${e.reason}`, 'bad');
+          this.flash('bad');
           break;
         case 'conflict':
           this.logMsg(`Ground conflict: ${e.a} and ${e.b}, ${e.distance} m apart`, 'bad');
-          this.el.scoreBox.classList.remove('flash');
-          void this.el.scoreBox.offsetWidth;
-          this.el.scoreBox.classList.add('flash');
+          this.flash('bad');
           break;
         case 'runwayChanged':
           this.logMsg(`Wind shift: runway ${e.runway} now in use`, 'warn');

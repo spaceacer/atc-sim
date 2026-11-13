@@ -2,7 +2,7 @@
 // future Python bridge) import from here only.
 
 export * from './types.js';
-export { Simulation, replay, DT, EXIT_FIX_TOLERANCE_NM } from './simulation.js';
+export { Simulation, replay, DT, EXIT_FIX_TOLERANCE_NM, V1_MARGIN_KT, VACATE_SEC, ROLLING_START_SAVING_SEC, lineUpSec } from './simulation.js';
 export { HOLD_LEG_SEC } from './airspace/holding.js';
 export { LOOKAHEAD_SEC } from './rules/prediction.js';
 export { stateHash } from './hash.js';

@@ -6,7 +6,7 @@ Two modes: **Approach radar** (vector, sequence and clear arrivals and
 departures) and **Ground** (push back, taxi and hold aircraft on a practice
 airport while the tower and the airborne traffic run automatically).
 
-**Version 0.9.0.** The project follows Semantic Versioning (`MAJOR.MINOR.PATCH`);
+**Version 0.10.0.** The project follows Semantic Versioning (`MAJOR.MINOR.PATCH`);
 what changed in each release is in [CHANGELOG.md](CHANGELOG.md).
 
 In the approach mode, arrivals enter from any edge of a rectangular airspace at
@@ -22,7 +22,7 @@ and a single-runway practice field.
 ## Play
 
 **No install:** play at <https://spaceacer.github.io/atc-sim/>, or double-click
-`ATC-Sim-0.9.0.html` (everything is inside that one file).
+`ATC-Sim-0.10.0.html` (everything is inside that one file).
 
 The game opens on the **main menu**: pick the airport, the position
 (**Approach radar** or **Ground**, where the airport offers it) and the
@@ -32,7 +32,7 @@ for the session.
 In a session, the icon rail on the left holds **Menu** (or the browser's Back
 button: pauses and offers to save before returning to the menu), **Save**,
 **Restart** (same choices, new traffic), the **score** (hover or focus it for
-the breakdown; it flashes red after a penalty) and **Settings**. The panel on
+the breakdown; it flashes green when points are won and red after a penalty) and **Settings**. The panel on
 the right shows the clock and wind, then the arrival and departure strips,
 messages and the command help; the **speed slider** (pause, 1× to 16×, Max)
 sits at its foot.
@@ -73,10 +73,10 @@ anywhere goes to the command line.
 | `S 210` | Speed 210 kt. |
 | `L 27` | Cleared to land. The runway must be in use, the aircraft within 60° of its heading, at or below 3,000 ft above the field and not past the threshold. It keeps your heading if that meets the centreline at least 3 nm out, otherwise it turns by itself to join (at most 30° off the runway heading). It holds its altitude until established, then follows the glidepath, slows to its type's approach speed and lands. |
 | `I 27` | Cleared to intercept: the same as `L` by default. With **Settings > Rules > Separate landing clearance** it is the approach clearance only, and `L` must follow before the set distance (2, 4 or 6 nm) or the aircraft goes around. |
-| `W` | Line up and wait. `W 32` lines up on another runway; `W 27 N4` lines up at an intersection. Allowed behind a landing aircraft (or a departure) on the same runway once it is 600 m or more beyond the line-up point; takeoff waits until the runway is clear. |
+| `W` | Line up and wait. Lining up takes 25 s (turboprops), 35 s (jets) or 45 s (heavies); a `T` given while lining up starts the roll once lined up, and `T` from holding short is a rolling start, 10 s quicker. `W 32` lines up on another runway; `W 27 N4` lines up at an intersection. Allowed behind a landing aircraft (or a departure) on the same runway once it is 600 m or more beyond the line-up point; takeoff waits until the runway is clear. |
 | `T` | Cleared for takeoff (from holding short or lined up). `T 32` uses another runway; `T 27 N4` departs from an intersection part-way down, if enough runway is left for the type. Refused while wake turbulence spacing runs (see Rules). |
 | `H` | Hold at present position. `H OSKAR` holds at a fix. Right turns and 1-minute legs; add `L` for left turns. Any heading, direct or landing clearance leaves the hold. |
-| `A` | Go around (on final: runway heading, 3,000 ft, counts as a go-around). Before the aircraft is established it just cancels the landing clearance. |
+| `A` | Go around (on final: runway heading, 3,000 ft, counts as a go-around). Before the aircraft is established it just cancels the landing clearance. For a departure: cancels a line-up, or rejects the takeoff while rolling below V1 (about 10 kt below lift-off speed); it stops, takes 40 s to vacate, and is back holding short. |
 
 Chain clauses on one line: `IGO451 C PUNE C 11 T`. Headings, routes and
 altitudes given before takeoff are flown after departure; departures hold
@@ -150,7 +150,8 @@ choices are remembered in the browser when it allows storage.
 
 **Settings** (the gear button, in both modes) holds what applies at once:
 
-- **Scope display:** label size, history trail (off, 24 s, 60 s), leader line
+- **Scope display:** label size, trails (on or off; 24 s, 1 min or 2 min;
+  coloured by altitude, as on Flightradar24, with a legend, or grey dots), leader line
   (off, 30 s default, 60 s, 2 min), range rings every 10 nm, fix names.
 - **Assistance:** conflict alerts on or off, pause on a separation loss or a
   go-around, sound alerts, and **helper buttons** (both modes): turn them off
@@ -260,7 +261,7 @@ every command with its tick. **Load saved session or scenario** (main menu) repl
 to the saved moment (paused), reproducing the exact state. A scenario file is the same
 format with no commands; examples are in `scenarios/`. Files record the simulator version that saved them
 (`appVersion`). Saving does not work inside the hosted claude.ai
-page (downloads are blocked there); use `ATC-Sim-0.9.0.html` or `npm run dev`.
+page (downloads are blocked there); use `ATC-Sim-0.10.0.html` or `npm run dev`.
 
 ## Python and AI training
 

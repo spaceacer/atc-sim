@@ -19,7 +19,7 @@ import type {
   SimEvent,
   SimState,
 } from './types.js';
-import { CATEGORY_TYPE, performanceOf, takeoffRunNeeded } from './aircraft/performance.js';
+import { CATEGORY_TYPE, performanceOf, takeoffRunNeeded, typeData } from './aircraft/performance.js';
 import { departureWakeSec } from './rules/wake.js';
 import { integrate } from './aircraft/flight.js';
 import {
@@ -55,6 +55,20 @@ import { createRng, type RngState } from './rng.js';
 import { distance, normHeading } from './geometry.js';
 
 /** Seconds of simulated time per tick. */
+/** Seconds to line up from the holding point, by type (taxi onto the runway and align). */
+export function lineUpSec(ac: Aircraft): number {
+  if (ac.category === 'heavy') return 45;
+  return typeData(ac.type)?.engines === 'turboprop' ? 25 : 35;
+}
+/** Cleared straight for takeoff, the line-up flows into the roll and is this much quicker. */
+export const ROLLING_START_SAVING_SEC = 10;
+/** Seconds to vacate the runway after a cancelled line-up or a rejected takeoff. */
+export const VACATE_SEC = 40;
+/** A takeoff can be rejected until this many knots below lift-off speed (about V1). */
+export const V1_MARGIN_KT = 10;
+/** Braking in a rejected takeoff, relative to normal landing braking. */
+const REJECT_BRAKING = 1.4;
+
 export const DT = 0.5;
 
 /** Aircraft this far outside the boundary have left the airspace, nm. */
@@ -83,6 +97,8 @@ export class Simulation {
   private log: LoggedCommand[] = [];
   /** Last takeoff per runway strip, for wake turbulence spacing. Rebuilt exactly on replay. */
   private lastTakeoff = new Map<string, { tick: number; callsign: string; type: string; category: Aircraft['category'] }>();
+  /** The takeoff each roll replaced in lastTakeoff, restored if that roll is rejected. */
+  private replacedTakeoff = new Map<string, { strip: string; last: { tick: number; callsign: string; type: string; category: Aircraft['category'] } | undefined }>();
   /** Runway end id -> its strip id and the strips that share concrete with it (static per airport). */
   private readonly strips = new Map<string, { strip: string; blocking: string[] }>();
 
@@ -158,6 +174,10 @@ export class Simulation {
     // 1. Ground roll, guidance, kinematics.
     for (const ac of s.aircraft) {
       const perf = performanceOf(ac);
+      if (ac.status === 'lineup') {
+        this.lineUpPhase(ac, tick);
+        continue;
+      }
       if (ac.status === 'rolling') {
         this.takeoffRoll(ac, tick);
         continue;
@@ -303,6 +323,9 @@ export class Simulation {
       targetSpeed: speed,
       expedite: false,
       verticalSpeed: 0,
+      groundSec: 0,
+      takeoffCleared: false,
+      aborting: false,
       lateralMode: 'heading',
       route: [],
       runway: null,
@@ -348,8 +371,56 @@ export class Simulation {
     this.events.push({ type: 'landed', tick, callsign: ac.callsign, runway: ac.runway ?? '' });
   }
 
+  /** Lining up takes time; so does vacating after a cancelled line-up or a rejected takeoff. */
+  private lineUpPhase(ac: Aircraft, tick: number): void {
+    if (ac.groundSec <= 0) return; // lined up and waiting
+    ac.groundSec = Math.max(0, ac.groundSec - DT);
+    if (ac.groundSec > 0) return;
+    const runway = ac.runway ?? '';
+    if (ac.aborting) {
+      // Off the runway and back at the holding point, ready to be cleared again.
+      ac.aborting = false;
+      ac.takeoffCleared = false;
+      ac.status = 'waiting';
+      ac.speed = 0;
+      if (ac.runway) this.moveToRunway(ac, ac.runway);
+      this.events.push({ type: 'vacated', tick, callsign: ac.callsign, runway });
+    } else if (ac.takeoffCleared) {
+      this.startRoll(ac);
+    } else {
+      this.events.push({ type: 'linedUp', tick, callsign: ac.callsign, runway });
+    }
+  }
+
+  private startRoll(ac: Aircraft): void {
+    const runway = ac.runway ? findRunway(this.scenario.airport, ac.runway) : undefined;
+    ac.status = 'rolling';
+    ac.speed = 0;
+    ac.takeoffCleared = false;
+    if (!runway) return;
+    // Wake turbulence timing starts when the roll starts.
+    const strip = this.strips.get(runway.id)?.strip ?? stripId(runway);
+    this.replacedTakeoff.set(ac.callsign, { strip, last: this.lastTakeoff.get(strip) });
+    this.lastTakeoff.set(strip, { tick: this.state.tick, callsign: ac.callsign, type: ac.type, category: ac.category });
+  }
+
   private takeoffRoll(ac: Aircraft, tick: number): void {
     const perf = performanceOf(ac);
+    if (ac.aborting) {
+      // Rejected takeoff: maximum braking (the landing figure is normal braking, 1.4 times gentler).
+      const before = ac.speed;
+      ac.speed = Math.max(0, ac.speed - perf.rolloutDecel * REJECT_BRAKING * DT);
+      const d = (((before + ac.speed) / 2) / 3600) * DT;
+      const hr = (ac.heading * Math.PI) / 180;
+      ac.x += Math.sin(hr) * d;
+      ac.y += Math.cos(hr) * d;
+      if (ac.speed === 0) {
+        ac.status = 'lineup';
+        ac.groundSec = VACATE_SEC;
+      }
+      return;
+    }
+    if (ac.speed === 0) this.replacedTakeoff.delete(ac.callsign);
     ac.speed = Math.min(perf.rotateSpeed, ac.speed + perf.takeoffAccel * DT);
     const distNm = (ac.speed / 3600) * DT;
     const h = (ac.heading * Math.PI) / 180;
@@ -360,6 +431,7 @@ export class Simulation {
       ac.turnAltitude = this.scenario.airport.elevation + DEPARTURE_TURN_HEIGHT;
       ac.targetSpeed = Math.max(ac.targetSpeed, perf.minSpeed);
       this.events.push({ type: 'tookOff', tick, callsign: ac.callsign, runway: ac.runway ?? '' });
+      this.replacedTakeoff.delete(ac.callsign);
       ac.runway = null;
     }
   }
@@ -589,6 +661,7 @@ export class Simulation {
         };
       }
       case 'goAround': {
+        if (ac.status === 'rolling' || ac.status === 'lineup') return this.abortTakeoff(ac);
         if (ac.lateralMode === 'localizer' && ac.runway) {
           const runway = findRunway(airport, ac.runway);
           if (runway) this.missedApproach(ac, runway, 'instructed by ATC', this.state.tick);
@@ -606,7 +679,10 @@ export class Simulation {
         if (ac.status === 'rolling' || ac.status === 'airborne') {
           return { ok: false, message: `${ac.callsign} is already ${ac.status === 'rolling' ? 'rolling' : 'airborne'}` };
         }
-        if (lineUpOnly && ac.status === 'lineup') return { ok: false, message: `${ac.callsign} is already lined up` };
+        if (ac.aborting) return { ok: false, message: `${ac.callsign} is vacating the runway` };
+        if (lineUpOnly && ac.status === 'lineup') {
+          return { ok: false, message: `${ac.callsign} is already ${ac.groundSec > 0 ? 'lining up' : 'lined up'}` };
+        }
         const wanted = cmd.runway ?? ac.runway ?? '';
         const runway = findRunway(airport, wanted);
         if (!runway) {
@@ -654,22 +730,51 @@ export class Simulation {
           }
         }
 
-        // Taxi to another runway instantly (no ground movement model yet).
+        // Taxi to another runway instantly (no ground movement model yet); lining up takes time.
         if (ac.status !== 'lineup') {
           this.moveToRunway(ac, runway.id, offsetNm);
           ac.fromIntersection = intersection?.name ?? null;
+          ac.status = 'lineup';
+          // Cleared straight for takeoff, the crew lines up without stopping (a rolling start).
+          ac.groundSec = lineUpSec(ac) - (lineUpOnly ? 0 : ROLLING_START_SAVING_SEC);
         }
         if (lineUpOnly) {
-          ac.status = 'lineup';
           return { ok: true, message: `${ac.callsign}${where ? ` via${where},` : ''} line up and wait runway ${runway.id}` };
         }
-        ac.status = 'rolling';
-        ac.speed = 0;
-        const strip = this.strips.get(runway.id)?.strip ?? stripId(runway);
-        this.lastTakeoff.set(strip, { tick: this.state.tick, callsign: ac.callsign, type: ac.type, category: ac.category });
+        ac.takeoffCleared = true;
+        if (ac.groundSec <= 0) this.startRoll(ac);
         return { ok: true, message: `${ac.callsign}${where ? ` from${where},` : ''} cleared for takeoff runway ${runway.id}` };
       }
     }
+  }
+
+  /** A: cancel a line-up, or reject a takeoff below V1. */
+  private abortTakeoff(ac: Aircraft): CommandResult {
+    const runway = ac.runway ?? '';
+    if (ac.aborting) return { ok: false, message: `${ac.callsign} is already vacating runway ${runway}` };
+    if (ac.status === 'rolling') {
+      const perf = performanceOf(ac);
+      if (ac.speed >= perf.rotateSpeed - V1_MARGIN_KT) {
+        return { ok: false, message: `${ac.callsign} past V1, continuing the takeoff` };
+      }
+      ac.aborting = true;
+      ac.takeoffCleared = false;
+      // Its takeoff no longer counts for wake turbulence timing.
+      const r = this.replacedTakeoff.get(ac.callsign);
+      if (r) {
+        if (r.last) this.lastTakeoff.set(r.strip, r.last);
+        else this.lastTakeoff.delete(r.strip);
+        this.replacedTakeoff.delete(ac.callsign);
+      }
+      this.events.push({ type: 'takeoffAborted', tick: this.state.tick, callsign: ac.callsign, runway, rolling: true });
+      return { ok: true, message: `${ac.callsign} stop immediately, I say again, stop immediately, runway ${runway}` };
+    }
+    // Lined up or lining up: cancel and vacate.
+    ac.aborting = true;
+    ac.takeoffCleared = false;
+    ac.groundSec = VACATE_SEC;
+    this.events.push({ type: 'takeoffAborted', tick: this.state.tick, callsign: ac.callsign, runway, rolling: false });
+    return { ok: true, message: `${ac.callsign} cancel line-up, vacate runway ${runway}, hold short` };
   }
 
   /** Leave approach mode; level off where the aircraft is. Returns true if an approach was cancelled. */

@@ -1,7 +1,7 @@
 // Browser front end: wires the engine to the radar, strips and command line.
 // The UI only calls sim.command() / sim.step() and reads sim.getState().
 
-import { Simulation, DT, LANDING_CLEARANCE_NM, findRunway, takeoffRunNeeded, type Aircraft, type Command, type ScenarioOptions, type SimEvent, type TrafficProfile, type WeatherProfile } from '../engine/index.js';
+import { Simulation, DT, LANDING_CLEARANCE_NM, V1_MARGIN_KT, performanceOf, findRunway, takeoffRunNeeded, type Aircraft, type Command, type ScenarioOptions, type SimEvent, type TrafficProfile, type WeatherProfile } from '../engine/index.js';
 import { TRAFFIC_LEVELS, findMap, findTraffic, makeScenario, type MapInfo, type Mode } from '../data/scenarios.js';
 import { parseSession, restoreSession, sessionFromSim, type SessionFile } from '../data/session.js';
 import { parseCommand, isCallsign } from '../commands/parser.js';
@@ -74,7 +74,7 @@ let accumulator = 0;
 let lastFrame = performance.now();
 let prev = new Map<number, Prev>();
 const trails = new Map<number, Trail>();
-const TRAIL_EVERY_TICKS = Math.round(4 / DT);
+const TRAIL_EVERY_TICKS = Math.round(2 / DT);
 let trailLength = trailLengthFor(settings);
 const MAX_FRAME_BUDGET_MS = 8;
 
@@ -149,7 +149,7 @@ function recordTrails(): void {
       t = { points: [] };
       trails.set(ac.id, t);
     }
-    t.points.push({ x: ac.x, y: ac.y });
+    t.points.push({ x: ac.x, y: ac.y, alt: ac.altitude });
     while (t.points.length > trailLength) t.points.shift();
   }
   for (const id of trails.keys()) if (!alive.has(id)) trails.delete(id);
@@ -236,8 +236,11 @@ function quickCommands(ac: Aircraft, inUse: readonly string[]): { label: string;
         if (i.remainingM >= takeoffRunNeeded(ac)) out.push({ label: `Take off ${r} at ${i.name}`, text: `T ${r} ${i.name}` });
       }
     }
-  } else if (ac.status === 'lineup') {
-    out.push({ label: `Take off ${ac.runway}${ac.fromIntersection ? ` at ${ac.fromIntersection}` : ''}`, text: 'T' });
+  } else if (ac.status === 'lineup' && !ac.aborting) {
+    if (!ac.takeoffCleared) out.push({ label: `Take off ${ac.runway}${ac.fromIntersection ? ` at ${ac.fromIntersection}` : ''}`, text: 'T' });
+    out.push({ label: 'Cancel line-up', text: 'A' });
+  } else if (ac.status === 'rolling' && !ac.aborting && ac.speed < performanceOf(ac).rotateSpeed - V1_MARGIN_KT) {
+    out.push({ label: 'Abort takeoff', text: 'A' });
   }
   if (!ac.isArrival && ac.exitFix) {
     if (ac.route[0] !== ac.exitFix) out.push({ label: `Direct ${ac.exitFix}`, text: `C ${ac.exitFix}` });
@@ -319,6 +322,15 @@ function handleEvents(events: SimEvent[]): void {
       case 'tookOff':
         log(`${e.callsign} airborne from ${e.runway}`, 'ok');
         break;
+      case 'linedUp':
+        log(`${e.callsign} lined up and waiting, runway ${e.runway}`);
+        break;
+      case 'takeoffAborted':
+        log(e.rolling ? `${e.callsign} rejecting takeoff, runway ${e.runway}` : `${e.callsign} cancelling line-up, vacating ${e.runway}`, 'warn');
+        break;
+      case 'vacated':
+        log(`${e.callsign} vacated, holding short ${e.runway}`);
+        break;
       case 'localizerCaptured': {
         const ac = sim.getState().aircraft.find((a) => a.callsign === e.callsign);
         if (ac && !ac.landingCleared) {
@@ -334,21 +346,26 @@ function handleEvents(events: SimEvent[]): void {
         break;
       case 'landed':
         log(`${e.callsign} stopped on runway ${e.runway}, landing complete`, 'ok');
+        flashScore($('score-box'), 'good');
         dropSelectionIfGone();
         break;
       case 'departed':
         log(`${e.callsign} left via ${e.fix}, handed off`, 'ok');
+        flashScore($('score-box'), 'good');
         dropSelectionIfGone();
         break;
       case 'wrongExit':
+        flashScore($('score-box'), 'bad');
         log(`${e.callsign} ${e.reason}`, 'bad');
         dropSelectionIfGone();
         break;
       case 'missedApproach':
+        flashScore($('score-box'), 'bad');
         log(`${e.callsign} going around from ${e.runway}: ${e.reason}`, 'warn');
         if (settings.pauseOnGoAround) pauseFor(`${e.callsign} go-around`);
         break;
       case 'leftAirspace':
+        flashScore($('score-box'), 'bad');
         log(`${e.callsign} left the airspace`, 'bad');
         dropSelectionIfGone();
         break;
@@ -356,7 +373,7 @@ function handleEvents(events: SimEvent[]): void {
         log(`Separation lost: ${e.a} and ${e.b}, ${e.distance.toFixed(1)} nm, ${Math.round(e.verticalFt)} ft`, 'bad');
         if (settings.sound) beep('loss');
         if (settings.pauseOnLoss) pauseFor('separation loss');
-        flashScore($('score-box'));
+        flashScore($('score-box'), 'bad');
         break;
       case 'conflictWarning':
         if (!settings.conflictAlerts) break;
@@ -629,11 +646,11 @@ function speedLabel(v: number | 'max'): string {
 speedSlider.addEventListener('input', () => setSpeed(SPEEDS[Number(speedSlider.value)] ?? 1));
 speedSlider.addEventListener('change', () => input.focus());
 
-/** Red pulse on the score button after a penalty, so it is noticed while the breakdown stays hidden. */
-function flashScore(box: HTMLElement): void {
-  box.classList.remove('flash');
+/** Pulse on the score button: green when points are won, red after a penalty. */
+function flashScore(box: HTMLElement, kind: 'good' | 'bad'): void {
+  box.classList.remove('flash', 'flash-good');
   void box.offsetWidth; // restart the animation
-  box.classList.add('flash');
+  box.classList.add(kind === 'good' ? 'flash-good' : 'flash');
 }
 
 $('new-game').addEventListener('click', () => {

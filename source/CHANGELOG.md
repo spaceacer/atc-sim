@@ -9,6 +9,31 @@ While the major version is 0, a minor release may also change behaviour that
 saved sessions or trained agents rely on; such changes are listed under
 **Changed**.
 
+## 0.10.0 - 2026-11-13
+
+### Added
+- Rejected takeoff: `A` on a rolling departure below V1 (about 10 kt below
+  lift-off speed) brakes it to a stop; past V1 the takeoff continues. `A` on
+  a lined-up departure cancels the line-up. Either way it takes 40 s to vacate
+  and is then back holding short; its roll no longer counts for wake
+  turbulence spacing. Quick buttons *Abort takeoff* and *Cancel line-up*.
+  Events `takeoffAborted`, `vacated`, `linedUp`.
+- Trails coloured by altitude (orange low to violet at 15,000 ft and above)
+  as connected lines, with a legend on the scope. Settings: *Show trails*,
+  *Trail length* (24 s, 1 min, 2 min; default 1 min) and *Colour trails by
+  altitude*.
+- The score button flashes green when points are won (landing, departure,
+  ground departure or arrival on stand), red after any penalty.
+
+### Changed
+- Lining up takes time: 25 s for turboprops, 35 s for jets, 45 s for heavies.
+  A takeoff clearance given while lining up starts the roll once lined up;
+  cleared straight from holding short, the line-up is 10 s quicker (a rolling
+  start). The strip counts down (*Lining up 27, cleared, 12 s*). Wake
+  turbulence timing starts when the roll starts. Departures leave later than
+  in 0.9.0, so saved sessions replay differently.
+- Aircraft state has `groundSec`, `takeoffCleared` and `aborting`.
+
 ## 0.9.0 - 2026-11-13
 
 ### Changed

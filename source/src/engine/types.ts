@@ -83,6 +83,12 @@ export interface Aircraft {
   turnAltitude: number;
   /** Departure lined up or rolling from a mid-runway intersection (null = full length). */
   fromIntersection: string | null;
+  /** Seconds left in a timed runway phase: lining up, or vacating after a cancelled line-up or rejected takeoff. */
+  groundSec: number;
+  /** Cleared for takeoff: starts rolling as soon as it is lined up. */
+  takeoffCleared: boolean;
+  /** Rejecting the takeoff (braking) or vacating the runway; back to holding short when done. */
+  aborting: boolean;
 
   // Departures
   exitFix: string | null;
@@ -237,6 +243,9 @@ export interface LoggedCommand {
 export type SimEvent =
   | { type: 'spawned'; tick: number; callsign: string; isArrival: boolean; where: string }
   | { type: 'tookOff'; tick: number; callsign: string; runway: string }
+  | { type: 'linedUp'; tick: number; callsign: string; runway: string }
+  | { type: 'takeoffAborted'; tick: number; callsign: string; runway: string; rolling: boolean }
+  | { type: 'vacated'; tick: number; callsign: string; runway: string }
   | { type: 'touchdown'; tick: number; callsign: string; runway: string }
   | { type: 'landed'; tick: number; callsign: string; runway: string }
   | { type: 'missedApproach'; tick: number; callsign: string; runway: string; reason: string }

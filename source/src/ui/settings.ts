@@ -10,7 +10,9 @@ import { DEFAULT_DISPLAY, type RadarDisplay } from './radar.js';
 
 export interface Settings {
   labelSize: 'small' | 'normal' | 'large';
-  trail: 'off' | 'short' | 'long';
+  showTrails: boolean;
+  trail: 'short' | 'long' | 'longer';
+  trailByAltitude: boolean;
   leaderSec: number;
   rangeRings: boolean;
   fixNames: boolean;
@@ -36,7 +38,9 @@ export interface Settings {
 
 export const DEFAULT_SETTINGS: Settings = {
   labelSize: 'normal',
-  trail: 'short',
+  showTrails: true,
+  trail: 'long',
+  trailByAltitude: true,
   leaderSec: 30,
   rangeRings: false,
   fixNames: true,
@@ -83,7 +87,9 @@ const GROUPS: readonly Group[] = [
     inGame: true,
     fields: [
       { key: 'labelSize', label: 'Label size', choices: [['small', 'Small'], ['normal', 'Normal'], ['large', 'Large']] },
-      { key: 'trail', label: 'History trail', choices: [['off', 'Off'], ['short', 'Short (24 s)'], ['long', 'Long (60 s)']] },
+      { key: 'showTrails', label: 'Show trails' },
+      { key: 'trail', label: 'Trail length', choices: [['short', '24 s'], ['long', '1 min'], ['longer', '2 min']] },
+      { key: 'trailByAltitude', label: 'Colour trails by altitude', hint: 'Orange low, through yellow, green and blue, to violet at 15,000 ft and above.' },
       { key: 'leaderSec', label: 'Leader line', choices: [['0', 'Off'], ['30', '30 s'], ['60', '60 s'], ['120', '2 min']] },
       { key: 'rangeRings', label: 'Range rings every 10 nm' },
       { key: 'fixNames', label: 'Fix names' },
@@ -142,7 +148,10 @@ export function loadSettings(): Settings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
-      const s = sanitize(JSON.parse(raw));
+      const parsed: unknown = JSON.parse(raw);
+      const s = sanitize(parsed);
+      // Before 0.10.0, trails were switched off with trail: 'off'.
+      if (parsed && typeof parsed === 'object' && (parsed as { trail?: unknown }).trail === 'off') s.showTrails = false;
       // 0.9.0 shortened the default leader line from 60 s to 30 s; move stored defaults along once.
       if (localStorage.getItem(LEADER_MIGRATED) === null) {
         if (s.leaderSec === 60) s.leaderSec = 30;
@@ -226,12 +235,14 @@ export function radarDisplayFor(s: Settings): RadarDisplay {
     rangeRings: s.rangeRings,
     fixNames: s.fixNames,
     conflictAlerts: s.conflictAlerts,
+    trailColours: s.showTrails && s.trailByAltitude,
   };
 }
 
-/** Trail points kept (one every 4 s). */
+/** Trail points kept (one every 2 s). */
 export function trailLengthFor(s: Settings): number {
-  return s.trail === 'off' ? 0 : s.trail === 'long' ? 15 : 6;
+  if (!s.showTrails) return 0;
+  return s.trail === 'longer' ? 60 : s.trail === 'long' ? 30 : 12;
 }
 
 // ---------------------------------------------------------------------------
