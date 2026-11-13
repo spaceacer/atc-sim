@@ -168,6 +168,8 @@ export class Simulation {
       if (inUse.join() !== s.runwaysInUse.join()) {
         s.runwaysInUse = inUse;
         this.events.push({ type: 'runwaysChanged', tick, inUse });
+        // Departures holding short of a runway that just closed taxi to the runway now in use.
+        for (const ac of s.aircraft) if (ac.status === 'waiting') this.reassignIfClosed(ac);
       }
     }
 
@@ -385,6 +387,7 @@ export class Simulation {
       ac.speed = 0;
       if (ac.runway) this.moveToRunway(ac, ac.runway);
       this.events.push({ type: 'vacated', tick, callsign: ac.callsign, runway });
+      this.reassignIfClosed(ac);
     } else if (ac.takeoffCleared) {
       this.startRoll(ac);
     } else {
@@ -746,6 +749,22 @@ export class Simulation {
         return { ok: true, message: `${ac.callsign}${where ? ` from${where},` : ''} cleared for takeoff runway ${runway.id}` };
       }
     }
+  }
+
+  /**
+   * A departure holding short of a runway that is no longer in use is sent to
+   * the preferred runway in use (taxiing is instant; there is no ground model here).
+   */
+  private reassignIfClosed(ac: Aircraft): void {
+    const { airport } = this.scenario;
+    const inUse = this.state.runwaysInUse;
+    if (ac.isArrival || ac.status !== 'waiting' || !ac.runway || inUse.includes(ac.runway)) return;
+    const to = airport.preferredRunways.find((r) => inUse.includes(r)) ?? inUse[0];
+    if (!to) return; // every runway closed: it waits
+    const from = ac.runway;
+    ac.fromIntersection = null;
+    this.moveToRunway(ac, to);
+    this.events.push({ type: 'runwayReassigned', tick: this.state.tick, callsign: ac.callsign, from, to });
   }
 
   /** A: cancel a line-up, or reject a takeoff below V1. */

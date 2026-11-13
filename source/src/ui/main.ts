@@ -355,6 +355,9 @@ function handleEvents(events: SimEvent[]): void {
       case 'vacated':
         log(`${e.callsign} vacated, holding short ${e.runway}`);
         break;
+      case 'runwayReassigned':
+        log(`${e.callsign}: runway ${e.from} closed, now holding short ${e.to}`, 'warn');
+        break;
       case 'localizerCaptured': {
         const ac = sim.getState().aircraft.find((a) => a.callsign === e.callsign);
         if (ac && !ac.landingCleared) {

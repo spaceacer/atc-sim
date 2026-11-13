@@ -94,6 +94,27 @@ test('A rejects a takeoff below V1, refuses above it, and cancels a line-up', ()
   assert.equal(ac2.status, 'waiting');
 });
 
+test('a departure holding short of a runway that closes is sent to the runway in use', () => {
+  // Wind from the west: 27 in use. Then it swings to the east, closing 27.
+  const sim = new Simulation({ ...emptySim().scenario, weather: { variable: true, initialWind: { direction: 270, speed: 10 } } });
+  const ac = departure(sim);
+  assert.equal(ac.runway, '27');
+  sim.getState().wind.direction = 90;
+  sim.getState().wind.speed = 15;
+  const events: string[] = [];
+  for (let i = 0; i < ticks(120, sim) && ac.runway === '27'; i++) {
+    sim.step();
+    for (const e of sim.drainEvents()) events.push(e.type);
+  }
+  assert.ok(!sim.getState().runwaysInUse.includes('27'));
+  assert.equal(ac.runway, '09');
+  assert.ok(events.includes('runwayReassigned'));
+  assert.equal(ac.heading, 90);
+  const w = sim.command({ type: 'lineUp', callsign: 'DEP1' });
+  assert.equal(w.ok, true, w.message);
+  assert.match(w.message, /runway 09/);
+});
+
 test('leaving through the assigned exit fix high enough scores', () => {
   const sim = emptySim();
   const ac = departure(sim);

@@ -246,6 +246,7 @@ export type SimEvent =
   | { type: 'linedUp'; tick: number; callsign: string; runway: string }
   | { type: 'takeoffAborted'; tick: number; callsign: string; runway: string; rolling: boolean }
   | { type: 'vacated'; tick: number; callsign: string; runway: string }
+  | { type: 'runwayReassigned'; tick: number; callsign: string; from: string; to: string }
   | { type: 'touchdown'; tick: number; callsign: string; runway: string }
   | { type: 'landed'; tick: number; callsign: string; runway: string }
   | { type: 'missedApproach'; tick: number; callsign: string; runway: string; reason: string }

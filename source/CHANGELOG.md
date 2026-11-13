@@ -9,6 +9,16 @@ While the major version is 0, a minor release may also change behaviour that
 saved sessions or trained agents rely on; such changes are listed under
 **Changed**.
 
+## 0.11.2 - 2026-11-13
+
+### Fixed
+- After a wind shift closed their runway, departures already holding short
+  kept it, so `W` and `T` without a runway were refused ("runway 27 not in
+  use") while other runways were open. They now move to the preferred runway
+  in use when theirs closes (and after vacating, if it closed meanwhile), with
+  a message and a `runwayReassigned` event. Aircraft already lined up or
+  rolling are left to the controller.
+
 ## 0.11.1 - 2026-11-13
 
 ### Fixed
