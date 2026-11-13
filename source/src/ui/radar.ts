@@ -50,6 +50,8 @@ export interface Prev {
 
 export interface Trail {
   points: { x: number; y: number; alt: number }[];
+  /** The whole flight so far (the Path button): always coloured by altitude, no fading. */
+  full?: boolean;
 }
 
 /** Altitude colour scale for trails, in the spirit of Flightradar24: warm low, cool high. */
@@ -258,22 +260,28 @@ export class Radar {
     const offsets = this.placeLabels(shown, selectedId);
 
     // Draw the selected aircraft last so its block sits on top.
-    const trailOf = (id: number) => (this.display.trailsSelectedOnly && id !== selectedId ? undefined : trails.get(id));
+    const trailOf = (id: number) => {
+      const t = trails.get(id);
+      return this.display.trailsSelectedOnly && id !== selectedId && !t?.full ? undefined : t;
+    };
     let trailShown = false;
+    let colouredShown = false;
     for (const s of shown) {
       if (s.ac.id === selectedId) continue;
       const t = trailOf(s.ac.id);
       if (t && t.points.length > 0) trailShown = true;
+      if (t?.full && t.points.length > 0) colouredShown = true;
       this.drawAircraft(s.ac, s.x, s.y, false, t, s.lines, offsets.get(s.ac.id));
     }
     const sel = shown.find((s) => s.ac.id === selectedId);
     if (sel) {
       const t = trailOf(sel.ac.id);
       if (t && t.points.length > 0) trailShown = true;
+      if (t?.full && t.points.length > 0) colouredShown = true;
       this.drawAircraft(sel.ac, sel.x, sel.y, true, t, sel.lines, offsets.get(sel.ac.id));
     }
     // The altitude legend appears only while a coloured trail is on the scope.
-    if (trailShown && this.display.trailColours) this.drawAltitudeLegend();
+    if ((trailShown && this.display.trailColours) || colouredShown) this.drawAltitudeLegend();
   }
 
   /** Altitude colour key, top left under the airport name. */
@@ -658,13 +666,13 @@ export class Radar {
     // History trail: a line coloured by altitude, or the classic grey dots.
     if (trail && trail.points.length > 0) {
       const n = trail.points.length;
-      if (this.display.trailColours) {
+      if (this.display.trailColours || trail.full) {
         ctx.lineWidth = 2;
         ctx.lineCap = 'round';
         for (let i = 0; i < n; i++) {
           const a = trail.points[i];
           const b = i + 1 < n ? trail.points[i + 1] : { x, y, alt: ac.altitude };
-          ctx.globalAlpha = 0.3 + (0.6 * (i + 1)) / n; // older is fainter
+          ctx.globalAlpha = trail.full ? 0.9 : 0.3 + (0.6 * (i + 1)) / n; // older is fainter
           ctx.strokeStyle = altitudeColour((a.alt + b.alt) / 2);
           ctx.beginPath();
           ctx.moveTo(this.sx(a.x), this.sy(a.y));

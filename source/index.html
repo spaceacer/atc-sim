@@ -3,8 +3,8 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="version" content="0.10.1" />
-    <title>ATC Simulator 0.10.1</title>
+    <meta name="version" content="0.11.0" />
+    <title>ATC Simulator 0.11.0</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -19,7 +19,7 @@
         <div class="wordmark">
           <span class="wordmark-dot" aria-hidden="true"></span>
           <h1>ATC Simulator</h1>
-          <span class="wordmark-version">v<span id="menu-version">0.10.1</span></span>
+          <span class="wordmark-version">v<span id="menu-version">0.11.0</span></span>
         </div>
         <button id="menu-help" type="button" class="m-link">How to play</button>
       </header>
@@ -71,11 +71,12 @@
         <button id="menu-btn" type="button" class="rail-btn" title="Main menu (ends the session)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/><path d="M9 12h11"/></svg><span>Menu</span></button>
         <button id="save" type="button" class="rail-btn" title="Save session to a file"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4"/><path d="M8 20v-6h8v6"/></svg><span>Save</span></button>
         <button id="new-game" type="button" class="rail-btn" title="Restart: same airport and settings, new traffic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg><span>Restart</span></button>
+        <button id="path-btn" type="button" class="rail-btn" aria-pressed="false" title="Flight path: show the whole route flown by the selected aircraft"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M12 19h4.5a3.5 3.5 0 0 0 0-7h-8a3.5 3.5 0 0 1 0-7H12"/></svg><span>Path</span></button>
         <div class="rail-score" id="score-box" tabindex="0" aria-describedby="stats">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8v6a4 4 0 0 1-8 0z"/><path d="M8 6H5a3 3 0 0 0 3 4"/><path d="M16 6h3a3 3 0 0 1-3 4"/><path d="M12 14v4"/><path d="M8 20h8"/></svg><span id="score">0</span>
           <dl id="stats" class="stats score-pop" role="tooltip"></dl>
         </div>
-        <button id="settings" type="button" class="rail-btn rail-end" title="Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/></svg><span>Settings</span></button>
+        <button id="settings" type="button" class="rail-btn rail-end" title="Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.3 4.3c.4-1.8 2.9-1.8 3.4 0a1.7 1.7 0 0 0 2.6 1.1c1.5-.9 3.3.8 2.4 2.4a1.7 1.7 0 0 0 1 2.6c1.8.4 1.8 2.9 0 3.4a1.7 1.7 0 0 0-1 2.6c.9 1.5-.8 3.3-2.4 2.4a1.7 1.7 0 0 0-2.6 1c-.4 1.8-2.9 1.8-3.4 0a1.7 1.7 0 0 0-2.6-1c-1.5.9-3.3-.8-2.4-2.4a1.7 1.7 0 0 0-1-2.6c-1.8-.4-1.8-2.9 0-3.4a1.7 1.7 0 0 0 1-2.6c-.9-1.5.8-3.3 2.4-2.4 1 .6 2.3.1 2.6-1.1z"/><circle cx="12" cy="12" r="3"/></svg><span>Settings</span></button>
       </nav>
       <section class="scope" aria-label="Radar">
         <div class="view">
@@ -150,7 +151,7 @@
               than 5 kt of tailwind and a runway closes. Session seed <span id="seed"></span>.
             </p>
           </details>
-          <p class="version">ATC Simulator <span id="version">0.10.1</span></p>
+          <p class="version">ATC Simulator <span id="version">0.11.0</span></p>
         </div>
 
         <footer class="speed-bar">
@@ -169,7 +170,7 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8v6a4 4 0 0 1-8 0z"/><path d="M8 6H5a3 3 0 0 0 3 4"/><path d="M16 6h3a3 3 0 0 1-3 4"/><path d="M12 14v4"/><path d="M8 20h8"/></svg><span id="g-score">0</span>
           <dl id="g-stats" class="stats score-pop" role="tooltip"></dl>
         </div>
-        <button id="g-settings" type="button" class="rail-btn rail-end" title="Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/></svg><span>Settings</span></button>
+        <button id="g-settings" type="button" class="rail-btn rail-end" title="Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.3 4.3c.4-1.8 2.9-1.8 3.4 0a1.7 1.7 0 0 0 2.6 1.1c1.5-.9 3.3.8 2.4 2.4a1.7 1.7 0 0 0 1 2.6c1.8.4 1.8 2.9 0 3.4a1.7 1.7 0 0 0-1 2.6c.9 1.5-.8 3.3-2.4 2.4a1.7 1.7 0 0 0-2.6 1c-.4 1.8-2.9 1.8-3.4 0a1.7 1.7 0 0 0-2.6-1c-1.5.9-3.3-.8-2.4-2.4a1.7 1.7 0 0 0-1-2.6c-1.8-.4-1.8-2.9 0-3.4a1.7 1.7 0 0 0 1-2.6c-.9-1.5.8-3.3 2.4-2.4 1 .6 2.3.1 2.6-1.1z"/><circle cx="12" cy="12" r="3"/></svg><span>Settings</span></button>
       </nav>
       <section class="scope" aria-label="Ground radar">
         <div class="view">
@@ -238,7 +239,7 @@
               cargo stands are south of the runway, so cargo traffic has to cross it.
             </p>
           </details>
-          <p class="version">ATC Simulator <span class="version-number">0.10.1</span></p>
+          <p class="version">ATC Simulator <span class="version-number">0.11.0</span></p>
         </div>
 
         <footer class="speed-bar">

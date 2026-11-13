@@ -9,6 +9,17 @@ While the major version is 0, a minor release may also change behaviour that
 saved sessions or trained agents rely on; such changes are listed under
 **Changed**.
 
+## 0.11.0 - 2026-11-13
+
+### Added
+- **Path** button on the rail (approach radar): shows the whole route the
+  selected aircraft has flown since it entered or took off (up to two hours),
+  coloured by altitude like Flightradar24, with the altitude legend. Click
+  again to turn it off.
+
+### Fixed
+- The Settings icon on the rail is a gear (it looked like a sun).
+
 ## 0.10.1 - 2026-11-13
 
 ### Changed

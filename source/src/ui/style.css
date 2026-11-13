@@ -1513,3 +1513,9 @@ code {
     background: transparent;
   }
 }
+
+.rail-btn[aria-pressed='true'] {
+  background: #1d2d37;
+  color: var(--amber);
+  box-shadow: inset 2px 0 0 var(--amber);
+}

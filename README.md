@@ -6,7 +6,7 @@ A browser-based air traffic control game. Vector arrivals onto the runway, seque
 
 No install, no account. It runs entirely in your browser, and works on desktop (a keyboard is recommended).
 
-**Version 0.10.1**
+**Version 0.11.0**
 
 ## Getting started
 

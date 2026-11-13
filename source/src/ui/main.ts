@@ -74,6 +74,11 @@ let accumulator = 0;
 let lastFrame = performance.now();
 let prev = new Map<number, Prev>();
 const trails = new Map<number, Trail>();
+/** Every aircraft's whole flight so far (one point every 2 s), for the Path button. */
+const paths = new Map<number, Trail['points']>();
+const MAX_PATH_POINTS = 3600; // two hours
+let showPath = false;
+const pathBtn = $<HTMLButtonElement>('path-btn');
 const TRAIL_EVERY_TICKS = Math.round(2 / DT);
 let trailLength = trailLengthFor(settings);
 const MAX_FRAME_BUDGET_MS = 8;
@@ -135,12 +140,31 @@ function tick(now: number): void {
 
   const state = sim.getState();
   radar.setRunwaysInUse(state.runwaysInUse);
-  radar.render(state, prev, alpha, selectedId, trails);
+  let shownTrails = trails;
+  if (showPath && selectedId !== null) {
+    // The selected aircraft's whole flight replaces its short trail.
+    const p = paths.get(selectedId);
+    if (p && p.length > 0) {
+      shownTrails = new Map(trails);
+      shownTrails.set(selectedId, { points: p, full: true });
+    }
+  }
+  radar.render(state, prev, alpha, selectedId, shownTrails);
   updatePanel(now);
 }
 
 function recordTrails(): void {
   const alive = new Set<number>();
+  for (const ac of sim.getState().aircraft) {
+    if (ac.status === 'airborne' || ac.status === 'rolling') {
+      let p = paths.get(ac.id);
+      if (!p) paths.set(ac.id, (p = []));
+      p.push({ x: ac.x, y: ac.y, alt: ac.altitude });
+      if (p.length > MAX_PATH_POINTS) p.shift();
+    }
+  }
+  const present = new Set(sim.getState().aircraft.map((a) => a.id));
+  for (const id of paths.keys()) if (!present.has(id)) paths.delete(id); // kept through the landing rollout
   for (const ac of sim.getState().aircraft) {
     if (ac.status !== 'airborne' || trailLength === 0) continue;
     alive.add(ac.id);
@@ -643,6 +667,13 @@ function speedLabel(v: number | 'max'): string {
   return v === 0 ? 'Paused' : v === 'max' ? 'Max' : `${v}×`;
 }
 
+pathBtn.addEventListener('click', () => {
+  showPath = !showPath;
+  pathBtn.setAttribute('aria-pressed', String(showPath));
+  if (showPath && selectedId === null) log('Flight path on: select an aircraft to see the route it has flown.');
+  input.focus();
+});
+
 speedSlider.addEventListener('input', () => setSpeed(SPEEDS[Number(speedSlider.value)] ?? 1));
 speedSlider.addEventListener('change', () => input.focus());
 
@@ -715,6 +746,7 @@ function startGame(file?: SessionFile): void {
   selectedId = null;
   prev.clear();
   trails.clear();
+  paths.clear();
   strips.clear();
   logEl.innerHTML = '';
   lastStatsHtml = '';
