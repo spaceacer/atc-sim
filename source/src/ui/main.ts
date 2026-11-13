@@ -1,7 +1,7 @@
 // Browser front end: wires the engine to the radar, strips and command line.
 // The UI only calls sim.command() / sim.step() and reads sim.getState().
 
-import { Simulation, DT, LANDING_CLEARANCE_NM, V1_MARGIN_KT, performanceOf, findRunway, takeoffRunNeeded, type Aircraft, type Command, type ScenarioOptions, type SimEvent, type TrafficProfile, type WeatherProfile } from '../engine/index.js';
+import { Simulation, DT, LANDING_CLEARANCE_NM, findRunway, takeoffRunNeeded, type Aircraft, type Command, type ScenarioOptions, type SimEvent, type TrafficProfile, type WeatherProfile } from '../engine/index.js';
 import { TRAFFIC_LEVELS, findMap, findTraffic, makeScenario, type MapInfo, type Mode } from '../data/scenarios.js';
 import { parseSession, restoreSession, sessionFromSim, type SessionFile } from '../data/session.js';
 import { parseCommand, isCallsign } from '../commands/parser.js';
@@ -264,8 +264,9 @@ function quickCommands(ac: Aircraft, inUse: readonly string[]): { label: string;
     }
   } else if (ac.status === 'lineup' && !ac.aborting) {
     if (!ac.takeoffCleared) out.push({ label: `Take off ${ac.runway}${ac.fromIntersection ? ` at ${ac.fromIntersection}` : ''}`, text: 'T' });
-    out.push({ label: 'Cancel line-up', text: 'A' });
-  } else if (ac.status === 'rolling' && !ac.aborting && ac.speed < performanceOf(ac).rotateSpeed - V1_MARGIN_KT) {
+    else out.push({ label: 'Abort takeoff', text: 'A' });
+  } else if (ac.status === 'rolling' && !ac.aborting) {
+    // Offered for the whole roll: above V1 the pilot refuses, and says so.
     out.push({ label: 'Abort takeoff', text: 'A' });
   }
   if (!ac.isArrival && ac.exitFix) {
@@ -352,7 +353,7 @@ function handleEvents(events: SimEvent[]): void {
         log(`${e.callsign} lined up and waiting, runway ${e.runway}`);
         break;
       case 'takeoffAborted':
-        log(e.rolling ? `${e.callsign} rejecting takeoff, runway ${e.runway}` : `${e.callsign} cancelling line-up, vacating ${e.runway}`, 'warn');
+        log(e.rolling ? `${e.callsign} rejecting takeoff, runway ${e.runway}` : `${e.callsign} takeoff clearance cancelled, holding on runway ${e.runway}`, 'warn');
         break;
       case 'vacated':
         log(`${e.callsign} vacated, holding short ${e.runway}`);

@@ -767,14 +767,14 @@ export class Simulation {
     this.events.push({ type: 'runwayReassigned', tick: this.state.tick, callsign: ac.callsign, from, to });
   }
 
-  /** A: cancel a line-up, or reject a takeoff below V1. */
+  /** A on a departure: reject a takeoff below V1 (refused above it), or withdraw a takeoff clearance given while lining up. */
   private abortTakeoff(ac: Aircraft): CommandResult {
     const runway = ac.runway ?? '';
     if (ac.aborting) return { ok: false, message: `${ac.callsign} is already vacating runway ${runway}` };
     if (ac.status === 'rolling') {
       const perf = performanceOf(ac);
       if (ac.speed >= perf.rotateSpeed - V1_MARGIN_KT) {
-        return { ok: false, message: `${ac.callsign} past V1, continuing the takeoff` };
+        return { ok: false, message: `${ac.callsign} unable, past V1, continuing the takeoff` };
       }
       ac.aborting = true;
       ac.takeoffCleared = false;
@@ -788,12 +788,13 @@ export class Simulation {
       this.events.push({ type: 'takeoffAborted', tick: this.state.tick, callsign: ac.callsign, runway, rolling: true });
       return { ok: true, message: `${ac.callsign} stop immediately, I say again, stop immediately, runway ${runway}` };
     }
-    // Lined up or lining up: cancel and vacate.
-    ac.aborting = true;
-    ac.takeoffCleared = false;
-    ac.groundSec = VACATE_SEC;
-    this.events.push({ type: 'takeoffAborted', tick: this.state.tick, callsign: ac.callsign, runway, rolling: false });
-    return { ok: true, message: `${ac.callsign} cancel line-up, vacate runway ${runway}, hold short` };
+    // Lining up or lined up. There is no cancelling a line-up: only a takeoff clearance can be withdrawn.
+    if (ac.takeoffCleared) {
+      ac.takeoffCleared = false;
+      this.events.push({ type: 'takeoffAborted', tick: this.state.tick, callsign: ac.callsign, runway, rolling: false });
+      return { ok: true, message: `${ac.callsign} takeoff clearance cancelled, hold position runway ${runway}` };
+    }
+    return { ok: false, message: `${ac.callsign} is not cleared for takeoff, nothing to abort` };
   }
 
   /** Leave approach mode; level off where the aircraft is. Returns true if an approach was cancelled. */

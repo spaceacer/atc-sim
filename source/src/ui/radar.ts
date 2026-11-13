@@ -262,7 +262,8 @@ export class Radar {
     const lh = Math.round(fs * 1.2);
     ctx.font = `${fs}px ${FONT}`;
     for (const ac of state.aircraft) {
-      if (ac.status === 'waiting') continue; // holding short: shown on the strips only
+      // Holding short, or still taxiing onto the runway: shown on the strips only until lined up.
+      if (ac.status === 'waiting' || (ac.status === 'lineup' && ac.groundSec > 0 && !ac.aborting)) continue;
       const p = prev.get(ac.id);
       const x = p ? p.x + (ac.x - p.x) * alpha : ac.x;
       const y = p ? p.y + (ac.y - p.y) * alpha : ac.y;
@@ -811,7 +812,7 @@ function altitudeLine(ac: Aircraft): string {
   const alt = pad3(Math.round(ac.altitude / 100));
   const diff = ac.targetAltitude - ac.altitude;
   const spd = String(Math.round(ac.speed / 10)).padStart(2, '0');
-  if (ac.status === 'lineup') return `${alt} ${ac.aborting ? 'VACATE' : ac.groundSec > 0 ? 'LINING' : 'LUAW'}`;
+  if (ac.status === 'lineup') return `${alt} ${ac.aborting ? 'VACATE' : 'LUAW'}`;
   if (ac.status === 'rolling' && ac.aborting) return `${alt} STOP`;
   if (ac.status === 'rollout') return `${alt} ${String(Math.round(ac.speed / 10)).padStart(2, '0')}`;
   if (Math.abs(diff) < 50) return `${alt} ${spd}`;

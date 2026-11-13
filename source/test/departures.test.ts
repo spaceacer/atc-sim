@@ -64,7 +64,7 @@ test('line up and wait takes time; a takeoff clearance while lining up rolls onc
   assert.ok(!events.includes('linedUp'), 'cleared for takeoff: no stop once lined up');
 });
 
-test('A rejects a takeoff below V1, refuses above it, and cancels a line-up', () => {
+test('A rejects a takeoff below V1 and refuses above it; a line-up cannot be cancelled', () => {
   const sim = emptySim();
   const ac = departure(sim);
   sim.command({ type: 'takeoff', callsign: 'DEP1' });
@@ -80,18 +80,32 @@ test('A rejects a takeoff below V1, refuses above it, and cancels a line-up', ()
   assert.ok(events.includes('vacated'));
   assert.equal(ac.status, 'waiting', 'back at the holding point');
 
-  // Past V1 the takeoff continues.
+  // Past V1 the pilot refuses and the takeoff continues.
   sim.command({ type: 'takeoff', callsign: 'DEP1' });
   runUntil(sim, 120, () => ac.status === 'rolling' && ac.speed >= 135);
-  assert.match(sim.command({ type: 'goAround', callsign: 'DEP1' }).message, /past V1/);
+  const late = sim.command({ type: 'goAround', callsign: 'DEP1' });
+  assert.equal(late.ok, false);
+  assert.match(late.message, /past V1/);
+  assert.ok(!ac.aborting);
+  runUntil(sim, 30, () => ac.status === 'airborne');
+  assert.equal(ac.status, 'airborne');
 
-  // Cancel a line-up.
+  // Lining up or lined up, not cleared: nothing to abort, and the aircraft stays put.
   const sim2 = emptySim();
   const ac2 = departure(sim2);
   sim2.command({ type: 'lineUp', callsign: 'DEP1' });
-  assert.match(sim2.command({ type: 'goAround', callsign: 'DEP1' }).message, /cancel line-up/);
-  runUntil(sim2, 60, () => ac2.status === 'waiting');
-  assert.equal(ac2.status, 'waiting');
+  const none = sim2.command({ type: 'goAround', callsign: 'DEP1' });
+  assert.equal(none.ok, false);
+  assert.match(none.message, /not cleared for takeoff/);
+  assert.equal(ac2.status, 'lineup');
+  assert.ok(!ac2.aborting);
+
+  // Cleared while lining up, then A: the clearance is withdrawn and it stays lined up.
+  sim2.command({ type: 'takeoff', callsign: 'DEP1' });
+  assert.match(sim2.command({ type: 'goAround', callsign: 'DEP1' }).message, /clearance cancelled/);
+  runUntil(sim2, 60, () => ac2.groundSec === 0);
+  sim2.run(ticks(10, sim2));
+  assert.equal(ac2.status, 'lineup', 'lined up and waiting, not rolling');
 });
 
 test('a departure holding short of a runway that closes is sent to the runway in use', () => {

@@ -9,6 +9,18 @@ While the major version is 0, a minor release may also change behaviour that
 saved sessions or trained agents rely on; such changes are listed under
 **Changed**.
 
+## 0.12.1 - 2026-11-13
+
+### Changed
+- An aircraft told to line up stays off the scope while it taxis onto the
+  runway; it appears when it is lined up (the strip still counts down), or
+  when it starts its roll if it was cleared for takeoff at once.
+- There is no *Cancel line-up* any more (button or `A`). *Abort takeoff* is
+  offered for the whole takeoff roll: below V1 the aircraft stops and vacates;
+  above V1 the pilot refuses ("unable, past V1") and takes off. If cleared for
+  takeoff while still lining up, `A` withdraws the clearance and the aircraft
+  stays lined up.
+
 ## 0.12.0 - 2026-11-13
 
 ### Added
