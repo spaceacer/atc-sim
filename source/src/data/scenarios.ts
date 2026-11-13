@@ -5,15 +5,37 @@ import type { Airport, Scenario, ScenarioOptions, TrafficProfile, WeatherProfile
 import { VABB } from './airports/vabb.js';
 import { XDEM } from './airports/xdem.js';
 
+export type Mode = 'approach' | 'ground';
+
 export interface MapInfo {
   id: string;
   label: string;
   airport: Airport;
+  /** Code shown on the main menu (the practice field is XGND in both modes). */
+  code: string;
+  /** One line for the main menu. */
+  blurb: string;
+  /** Modes this airport offers; the ground mode needs a ground layout. */
+  modes: readonly Mode[];
 }
 
 export const MAPS: readonly MapInfo[] = [
-  { id: 'vabb', label: 'Mumbai CSMIA', airport: VABB },
-  { id: 'xdem', label: 'Practice field', airport: XDEM },
+  {
+    id: 'vabb',
+    label: 'Mumbai CSMIA',
+    airport: VABB,
+    code: 'VABB',
+    blurb: 'Two crossing runways, 09/27 and 14/32. Busy mixed traffic.',
+    modes: ['approach'],
+  },
+  {
+    id: 'xdem',
+    label: 'Practice field',
+    airport: XDEM,
+    code: 'XGND',
+    blurb: 'One runway, 09/27. Quiet airspace to learn the controls.',
+    modes: ['approach', 'ground'],
+  },
 ];
 
 export const DEFAULT_MAP = 'vabb';

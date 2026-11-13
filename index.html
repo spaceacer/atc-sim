@@ -3,87 +3,1601 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>ATC Simulator</title>
-    <meta
-      name="description"
-      content="A browser-based air traffic control game. Vector arrivals, sequence departures and taxi aircraft on the ground. No install."
+    <meta name="version" content="0.8.0" />
+    <title>ATC Simulator 0.8.0</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap"
+      rel="stylesheet"
     />
     <style>
-      :root {
-        --scope: #17242c;
-        --bezel: #c9cfd3;
-        --ink: #1e2a30;
-        --ink-quiet: #4d5c64;
-        --amber: #ffc857;
-        --sans: 'Barlow', 'Segoe UI', system-ui, sans-serif;
-        --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
-      }
-      * { box-sizing: border-box; }
-      html, body { margin: 0; min-height: 100%; }
-      body {
-        background: var(--bezel);
-        color: var(--ink);
-        font: 16px/1.5 var(--sans);
-        display: grid;
-        place-items: center;
-        padding: 24px;
-      }
-      main {
-        width: 100%;
-        max-width: 640px;
-        background: var(--scope);
-        color: #e8eef1;
-        border-radius: 10px;
-        padding: 40px 36px;
-        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
-      }
-      .tag {
-        font: 600 12px/1 var(--mono);
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-        color: var(--amber);
-      }
-      h1 { margin: 12px 0 12px; font-size: 38px; line-height: 1.1; }
-      p { margin: 0 0 20px; color: #b9c6cc; }
-      ul { margin: 0 0 28px; padding-left: 20px; color: #b9c6cc; }
-      li { margin-bottom: 6px; }
-      li strong { color: #e8eef1; }
-      .actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
-      .play {
-        display: inline-block;
-        background: var(--amber);
-        color: #1a1a1a;
-        font-weight: 600;
-        text-decoration: none;
-        padding: 12px 26px;
-        border-radius: 6px;
-      }
-      .play:hover { filter: brightness(1.08); }
-      .play:focus-visible, .link:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
-      .link { color: #b9c6cc; }
-      footer { margin-top: 28px; font-size: 13px; color: #7f9099; }
-    </style>
+:root {
+  --scope: #17242c;
+  --scope-edge: #0f191f;
+  --bezel: #c9cfd3;
+  --bezel-dark: #b4bcc1;
+  --ink: #1e2a30;
+  --ink-quiet: #4d5c64;
+  --ok: #1f6b45;
+  --warn: #8a5a00;
+  --bad: #b3261e;
+  --amber: #ffc857;
+  --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --sans: 'Barlow', 'Segoe UI', system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Our display rules (e.g. .console { display: grid }) must not undo the hidden attribute. */
+[hidden] {
+  display: none !important;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bezel);
+  color: var(--ink);
+  font: 15px/1.4 var(--sans);
+}
+
+.console {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  height: 100%;
+}
+
+/* Scope ------------------------------------------------------------------ */
+
+.scope {
+  display: flex;
+  flex-direction: column;
+  background: var(--scope);
+  border-right: 6px solid var(--bezel-dark);
+  min-height: 0;
+}
+
+/* The canvas fills .view; the quick bar floats over its bottom edge, so the
+   map's size never depends on what is selected. */
+.view {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+#radar,
+#g-radar {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  display: block;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.command {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 12px;
+  background: var(--scope-edge);
+}
+
+.command label {
+  color: #7f98a6;
+  font-size: 13px;
+}
+
+.command input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid #2e4350;
+  border-radius: 4px;
+  background: var(--scope);
+  color: #e6eef0;
+  font: 15px var(--mono);
+  text-transform: uppercase;
+}
+
+.command input::placeholder {
+  color: #4f6878;
+  text-transform: none;
+}
+
+.command input:focus {
+  outline: 2px solid var(--amber);
+  outline-offset: 1px;
+}
+
+.command button {
+  padding: 9px 14px;
+  border: 0;
+  border-radius: 4px;
+  background: #2e4350;
+  color: #e6eef0;
+  font: 500 14px var(--sans);
+  cursor: pointer;
+}
+
+/* Panel ------------------------------------------------------------------ */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.panel > * {
+  flex-shrink: 0; /* the panel scrolls instead of squeezing its sections into each other */
+}
+
+.panel h2 {
+  margin: 4px 0 -6px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.session {
+  display: flex;
+  gap: 10px;
+  align-items: end;
+  justify-content: space-between;
+}
+
+.pick {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--ink-quiet);
+}
+
+.pick select {
+  padding: 6px 8px;
+  border: 1px solid var(--ink-quiet);
+  border-radius: 4px;
+  background: var(--bezel);
+  color: var(--ink);
+  font: 500 14px var(--sans);
+}
+
+.traffic-pick {
+  flex: 0 0 auto;
+}
+
+.files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  margin-top: -6px;
+}
+
+.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: 500 14px var(--sans);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.link:hover {
+  color: #0b4f6c;
+}
+
+.clock-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Wind dial ----------------------------------------------------------------- */
+
+.wind {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.wind figcaption {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: right;
+}
+
+.wind-text {
+  font: 600 15px var(--mono);
+}
+
+.in-use {
+  color: var(--ink-quiet);
+  font-size: 13px;
+}
+
+.dial-face {
+  fill: var(--scope);
+  stroke: var(--bezel-dark);
+  stroke-width: 3;
+}
+
+.dial-tick {
+  stroke: #4f6878;
+  stroke-width: 1.5;
+}
+
+.dial-label {
+  fill: var(--ink-quiet);
+  font: 600 9px var(--sans);
+  text-anchor: middle;
+}
+
+.dial-arrow {
+  stroke: var(--amber);
+  stroke-width: 2.5;
+}
+
+.dial-head {
+  fill: var(--amber);
+}
+
+.dial-from {
+  fill: #a8e6c1;
+}
+
+.clock {
+  font: 600 30px/1 var(--mono);
+  letter-spacing: -0.5px;
+}
+
+.rate {
+  margin-top: 4px;
+  color: var(--ink-quiet);
+  font-size: 13px;
+}
+
+button {
+  font-family: var(--sans);
+}
+
+button:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.ghost {
+  padding: 6px 10px;
+  border: 1px solid var(--ink-quiet);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.speed {
+  display: grid;
+  grid-template-columns: 1.4fr repeat(5, 1fr) 1.2fr;
+  border: 1px solid var(--ink-quiet);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.speed button {
+  padding: 8px 0;
+  border: 0;
+  border-left: 1px solid var(--ink-quiet);
+  background: transparent;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.speed button:first-child {
+  border-left: 0;
+}
+
+.speed button[aria-pressed='true'] {
+  background: var(--ink);
+  color: var(--bezel);
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px 12px;
+  margin: 0;
+}
+
+.stats div {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.stats dt {
+  color: var(--ink-quiet);
+  font-size: 13px;
+}
+
+.stats dd {
+  margin: 0;
+  font: 600 20px var(--mono);
+}
+
+.stats dd.bad {
+  color: var(--bad);
+}
+
+/* Progress strips ------------------------------------------------------------ */
+
+.bay h2 {
+  margin: 0 0 6px;
+}
+
+.count {
+  color: var(--ink-quiet);
+  font-weight: 500;
+}
+
+.strips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 232px;
+  overflow-y: auto;
+}
+
+.strip {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  column-gap: 8px;
+  row-gap: 1px;
+  padding: 5px 8px 5px 10px;
+  border-left: 5px solid #5d93b0;
+  border-radius: 3px;
+  background: #e4e8ea;
+  font: 13px var(--mono);
+  cursor: pointer;
+  user-select: none;
+}
+
+.strip.dep {
+  border-left-color: #c99a2e;
+  background: #ece6d8;
+}
+
+.strip.ground {
+  opacity: 0.85;
+}
+
+.strip:hover {
+  background: #f3f5f6;
+}
+
+.strip.dep:hover {
+  background: #f6f1e5;
+}
+
+.strip.sel,
+.strip.sel:hover {
+  background: var(--ink);
+  color: var(--amber);
+}
+
+.strip.warn {
+  box-shadow: inset 0 0 0 2px #e07b00;
+}
+
+.strip.conf {
+  box-shadow: inset 0 0 0 2px var(--bad);
+}
+
+.s-cs {
+  font-weight: 600;
+}
+
+.s-type,
+.s-state {
+  color: var(--ink-quiet);
+}
+
+.s-state {
+  text-align: right;
+  font-family: var(--sans);
+  font-size: 13px;
+}
+
+.s-spd {
+  text-align: right;
+}
+
+.s-exit {
+  grid-column: 1 / -1;
+  font-family: var(--sans);
+  color: var(--ink-quiet);
+}
+
+.strip.sel .s-type,
+.strip.sel .s-state,
+.strip.sel .s-exit {
+  color: #c9cfd3;
+}
+
+.strips .empty {
+  padding: 6px 0;
+  color: var(--ink-quiet);
+  font-size: 14px;
+}
+
+/* Quick commands ------------------------------------------------------------- */
+
+.quick {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 8px 12px;
+  background: rgba(15, 25, 31, 0.88);
+  border-top: 1px solid #2e4350;
+}
+
+.quick-cs {
+  color: var(--amber);
+  font: 600 13px var(--mono);
+  margin-right: 4px;
+}
+
+.quick button {
+  padding: 5px 10px;
+  border: 1px solid #2e4350;
+  border-radius: 4px;
+  background: var(--scope);
+  color: #e6eef0;
+  font: 500 13px var(--sans);
+  cursor: pointer;
+}
+
+.quick button:hover {
+  border-color: var(--amber);
+}
+
+.quick button:focus-visible {
+  outline: 2px solid var(--amber);
+}
+
+.log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex: 1;
+  min-height: 120px;
+  overflow-y: auto;
+  font-size: 14px;
+}
+
+.log li {
+  padding: 4px 0;
+  border-top: 1px solid var(--bezel-dark);
+}
+
+.log time {
+  font: 12px var(--mono);
+  color: var(--ink-quiet);
+}
+
+.log .ok {
+  color: var(--ok);
+}
+
+.log .warn {
+  color: var(--warn);
+}
+
+.log .bad {
+  color: var(--bad);
+}
+
+.help summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.help table {
+  width: 100%;
+  margin-top: 8px;
+  border-collapse: collapse;
+}
+
+.help td {
+  padding: 5px 4px;
+  border-top: 1px solid var(--bezel-dark);
+  font-family: var(--sans);
+  font-size: 14px;
+  vertical-align: top;
+}
+
+.help td:first-child {
+  white-space: nowrap;
+  padding-right: 10px;
+}
+
+.help p {
+  font-size: 14px;
+  color: var(--ink-quiet);
+}
+
+.version {
+  margin: 0;
+  font: 12px var(--mono);
+  color: var(--ink-quiet);
+}
+
+code {
+  font: 13px var(--mono);
+}
+
+/* Narrow screens: stack the panel under the scope. */
+@media (max-width: 820px) {
+  .console {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+    height: auto;
+  }
+
+  .scope {
+    border-right: 0;
+    border-bottom: 6px solid var(--bezel-dark);
+  }
+
+  #radar,
+#g-radar {
+    flex: none;
+    height: min(80vw, 70vh);
+  }
+
+  .panel {
+    overflow: visible;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    scroll-behavior: auto;
+  }
+}
+
+/* Settings dialog ---------------------------------------------------------- */
+
+.settings-btn {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  background: var(--ink);
+  color: var(--amber);
+  font: 600 14px var(--sans);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.settings-btn:hover {
+  color: #fff;
+}
+
+.settings-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.settings {
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  padding: 0;
+  border: 1px solid var(--bezel-dark);
+  border-radius: 8px;
+  background: var(--bezel);
+  color: var(--ink);
+}
+
+.settings::backdrop {
+  background: rgba(15, 25, 31, 0.55);
+}
+
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 18px 18px;
+}
+
+.settings-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.settings-head h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.settings fieldset {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--bezel-dark);
+  border-radius: 6px;
+}
+
+.settings legend {
+  padding: 0 6px;
+  font-weight: 600;
+}
+
+.settings-when {
+  font-weight: 400;
+  font-size: 13px;
+  color: var(--ink-quiet);
+}
+
+.settings-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.settings-row.check {
+  grid-template-columns: auto minmax(0, 1fr);
+  justify-content: start;
+}
+
+.settings-row select {
+  width: 100%;
+  font: inherit;
+  padding: 4px 6px;
+}
+
+.settings-hint {
+  margin: -4px 0 0 26px;
+  font-size: 13px;
+  color: var(--ink-quiet);
+}
+
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.settings-actions .link {
+  margin-right: auto;
+}
+
+.settings .primary {
+  padding: 7px 14px;
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  background: var(--ink);
+  color: var(--bezel);
+  font: 500 15px var(--sans);
+  cursor: pointer;
+}
+
+/* Ground mode */
+
+.g-wind {
+  text-align: right;
+}
+
+.quick-hint {
+  color: #c9d4da;
+  font: 13px var(--sans);
+}
+
+.quick .primary {
+  border-color: var(--amber);
+  background: var(--amber);
+  color: var(--scope-edge);
+  font-weight: 600;
+}
+
+.speed.speed-5 {
+  grid-template-columns: repeat(5, 1fr);
+}
+
+.settings-note {
+  margin: -8px 0 0;
+  font-size: 13px;
+  color: var(--ink-quiet);
+}
+
+/* Session header (in-game) ------------------------------------------------ */
+
+.session {
+  align-items: center;
+}
+
+.session-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.session-airport {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.session-meta {
+  font-size: 13px;
+  color: var(--ink-quiet);
+}
+
+.menu-btn {
+  padding: 6px 10px;
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  background: var(--ink);
+  color: var(--bezel);
+  font: 600 14px var(--sans);
+  cursor: pointer;
+}
+
+.leave {
+  width: min(440px, calc(100vw - 32px));
+  padding: 18px 20px;
+}
+
+.leave h2 {
+  margin: 0 0 8px;
+  font-size: 19px;
+}
+
+.leave p {
+  margin: 0 0 18px;
+  color: var(--ink-quiet);
+}
+
+/* Main menu ---------------------------------------------------------------- */
+
+.menu {
+  --m-ink: #e6edf0;
+  --m-quiet: #93a4ad;
+  --m-faint: #64767f;
+  --m-line: rgba(255, 255, 255, 0.08);
+  --m-edge: #2c3c45;
+  --m-side: #121c22;
+  --m-field: #0d161b;
+  position: fixed;
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  margin: 8px;
+  overflow: hidden;
+  border-radius: 10px;
+  background: var(--scope);
+  color: var(--m-ink);
+  box-shadow: inset 0 0 0 1px var(--scope-edge);
+}
+
+.menu-top,
+.menu-bottom {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 0 22px;
+  background: var(--m-side);
+}
+
+.menu-top {
+  height: 52px;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--m-line);
+}
+
+.menu-bottom {
+  height: 66px;
+  border-top: 1px solid var(--m-line);
+}
+
+.wordmark {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.wordmark h1 {
+  margin: 0;
+  font: 600 15px/1 var(--mono);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.wordmark-dot {
+  align-self: center;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--amber);
+  box-shadow: 0 0 10px rgba(255, 200, 87, 0.6);
+}
+
+.wordmark-version {
+  font: 12px var(--mono);
+  color: var(--m-faint);
+}
+
+.m-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--m-quiet);
+  font: 500 14px var(--sans);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.m-link:hover {
+  color: var(--m-ink);
+}
+
+.menu button:focus-visible,
+.menu select:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
+.menu-body {
+  display: grid;
+  grid-template-columns: 290px minmax(0, 1fr) 360px;
+  min-height: 0;
+}
+
+.m-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  padding: 18px;
+  overflow-y: auto; /* a last resort; the layout is sized to fit */
+  background: var(--m-side);
+}
+
+.m-col > * {
+  flex-shrink: 0; /* never squeeze sections into each other */
+}
+
+.m-airports {
+  border-right: 1px solid var(--m-line);
+}
+
+.m-setup {
+  border-left: 1px solid var(--m-line);
+}
+
+.m-h {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0 0;
+  font: 600 12px/1 var(--mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--m-quiet);
+}
+
+.m-h span {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--m-faint);
+  border-radius: 50%;
+  font-size: 10px;
+  letter-spacing: 0;
+}
+
+.m-h ~ .m-h {
+  margin-top: 10px;
+}
+
+.airport-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.airport {
+  display: grid;
+  gap: 4px;
+  padding: 11px 12px 11px 14px;
+  border: 1px solid var(--m-line);
+  border-left: 3px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--m-ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.airport:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.airport[aria-checked='true'] {
+  border-color: rgba(255, 200, 87, 0.35);
+  border-left-color: var(--amber);
+  background: rgba(255, 200, 87, 0.07);
+}
+
+.airport-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.airport-name {
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.airport-icao {
+  font: 600 12px var(--mono);
+  color: var(--amber);
+}
+
+.airport-blurb {
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--m-quiet);
+}
+
+.airport-modes {
+  font: 11px var(--mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--m-faint);
+}
+
+.m-seg {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  border: 1px solid var(--m-edge);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.m-seg button {
+  padding: 8px 6px;
+  border: 0;
+  background: transparent;
+  color: var(--m-quiet);
+  font: 600 14px var(--sans);
+  cursor: pointer;
+}
+
+.m-seg button + button {
+  border-left: 1px solid var(--m-edge);
+}
+
+.m-seg button:hover:not(:disabled) {
+  color: var(--m-ink);
+}
+
+.m-seg button[aria-pressed='true'] {
+  background: var(--amber);
+  color: var(--scope-edge);
+}
+
+.m-seg button:disabled {
+  color: #3f4f57;
+  cursor: not-allowed;
+}
+
+.m-note {
+  margin: -2px 0 0;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--m-quiet);
+}
+
+.m-controls {
+  display: grid;
+  gap: 10px;
+}
+
+.m-controls fieldset {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.m-controls legend {
+  margin-bottom: 4px;
+  padding: 0;
+  font: 600 11px var(--mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--m-faint);
+}
+
+.m-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 196px;
+  gap: 10px;
+  align-items: center;
+  font-size: 14px;
+}
+
+.m-sels {
+  display: grid;
+  gap: 6px;
+}
+
+.m-sels.two {
+  grid-template-columns: 1fr 1fr;
+}
+
+.m-row select {
+  width: 100%;
+  min-width: 0;
+  padding: 2px 6px;
+  border: 1px solid var(--m-edge);
+  border-radius: 4px;
+  background: var(--m-field);
+  color: var(--m-ink);
+  font: 500 13px var(--sans);
+}
+
+.m-row.off,
+.m-row.off select {
+  color: #4b5c64;
+}
+
+.m-preview {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--scope);
+}
+
+.preview-id {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 20px 4px;
+}
+
+.preview-icao {
+  font: 600 28px/1 var(--mono);
+  letter-spacing: 0.08em;
+}
+
+.preview-name {
+  font-size: 15px;
+  line-height: 1.25;
+}
+
+.preview-facts {
+  font: 12px var(--mono);
+  color: var(--m-quiet);
+}
+
+.preview-map {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+#menu-preview {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.menu-files {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.menu-error {
+  font-size: 13px;
+  color: #ff8a80;
+}
+
+.menu-summary {
+  flex: 1;
+  text-align: right;
+  font: 13px var(--mono);
+  color: var(--m-quiet);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.m-start {
+  flex: none;
+  padding: 11px 26px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--amber);
+  color: var(--scope-edge);
+  font: 600 16px var(--sans);
+  cursor: pointer;
+}
+
+.m-start::after {
+  content: ' \25B6';
+  font-size: 12px;
+}
+
+.m-start:hover {
+  filter: brightness(1.07);
+}
+
+/* How to play */
+
+.help-dialog {
+  width: min(820px, calc(100vw - 32px));
+  padding: 16px 20px 20px;
+}
+
+.help-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.help-dialog h3 {
+  margin: 14px 0 6px;
+  font-size: 15px;
+}
+
+.help-dialog p {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: var(--ink-quiet);
+}
+
+.help-dialog table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.help-dialog td {
+  padding: 3px 6px 3px 0;
+  border-bottom: 1px solid var(--bezel-dark);
+  vertical-align: top;
+}
+
+.help-dialog code {
+  font: 13px var(--mono);
+  white-space: nowrap;
+}
+
+/* Short laptop screens: tighten before anything scrolls. */
+@media (max-height: 700px) {
+  .m-col {
+    padding: 12px 16px;
+    gap: 7px;
+  }
+  .airport {
+    padding: 8px 10px 8px 12px;
+  }
+  .m-controls {
+    gap: 6px;
+  }
+  .m-controls fieldset {
+    gap: 2px;
+  }
+  .m-row {
+    font-size: 13px;
+  }
+  .m-h ~ .m-h {
+    margin-top: 4px;
+  }
+}
+
+@media (min-width: 1600px) {
+  .menu-body {
+    grid-template-columns: 320px minmax(0, 1fr) 420px;
+  }
+  .m-row {
+    grid-template-columns: minmax(0, 1fr) 220px;
+  }
+}
+
+@media (max-width: 1100px) {
+  .menu-body {
+    grid-template-columns: 250px minmax(0, 1fr) 330px;
+  }
+  .menu-summary {
+    display: none;
+  }
+}
+
+@media (max-width: 820px) {
+  .menu {
+    position: static;
+    min-height: calc(100% - 16px);
+  }
+  .menu-body {
+    grid-template-columns: 1fr;
+  }
+  .m-preview {
+    min-height: 60vw;
+  }
+  .help-cols {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
   </head>
   <body>
-    <main>
-      <div class="tag">Version 0.7.1</div>
-      <h1>ATC Simulator</h1>
-      <p>
-        A browser-based air traffic control game. Vector arrivals onto the runway, sequence
-        departures and keep everyone separated, or switch to the ground and taxi aircraft around a
-        practice airport.
-      </p>
-      <ul>
-        <li><strong>Approach radar:</strong> Mumbai (VABB) with crossing runways, or a single-runway practice field.</li>
-        <li><strong>Ground:</strong> push back, taxi and hold aircraft at a practice airport.</li>
-        <li>15 aircraft types, wake turbulence spacing, live wind, adjustable traffic.</li>
-      </ul>
-      <div class="actions">
-        <a class="play" href="ATC-Sim-0.7.1.html">▶ Play now</a>
-        <a class="link" href="https://github.com/spaceacer/atc-sim#readme">How to play</a>
-        <a class="link" href="https://github.com/spaceacer/atc-sim/issues">Report a bug</a>
+    <section id="menu" class="menu" aria-label="Main menu">
+      <header class="menu-top">
+        <div class="wordmark">
+          <span class="wordmark-dot" aria-hidden="true"></span>
+          <h1>ATC Simulator</h1>
+          <span class="wordmark-version">v<span id="menu-version">0.8.0</span></span>
+        </div>
+        <button id="menu-help" type="button" class="m-link">How to play</button>
+      </header>
+
+      <div class="menu-body">
+        <section class="m-col m-airports" aria-labelledby="m-airport-h">
+          <h2 id="m-airport-h" class="m-h"><span>1</span> Airport</h2>
+          <div id="menu-airports" class="airport-list" role="radiogroup" aria-labelledby="m-airport-h"></div>
+          <h2 class="m-h"><span>2</span> Position</h2>
+          <div class="m-seg m-mode" role="group" aria-label="Position">
+            <button type="button" data-menu-mode="approach" aria-pressed="true">Approach radar</button>
+            <button type="button" data-menu-mode="ground" aria-pressed="false">Ground</button>
+          </div>
+          <p id="menu-mode-note" class="m-note"></p>
+        </section>
+
+        <section class="m-preview" aria-label="Airport map">
+          <div class="preview-id">
+            <div id="preview-icao" class="preview-icao">VABB</div>
+            <div>
+              <div id="preview-name" class="preview-name"></div>
+              <div id="preview-facts" class="preview-facts"></div>
+            </div>
+          </div>
+          <div class="preview-map"><canvas id="menu-preview"></canvas></div>
+        </section>
+
+        <section class="m-col m-setup" aria-labelledby="m-diff-h">
+          <h2 id="m-diff-h" class="m-h"><span>3</span> Difficulty</h2>
+          <div id="menu-difficulty" class="m-seg m-diff" role="group" aria-labelledby="m-diff-h"></div>
+          <p id="menu-difficulty-note" class="m-note"></p>
+          <div id="menu-controls" class="m-controls"></div>
+        </section>
       </div>
-      <footer>No install, no account. Runs in your browser; a keyboard is recommended.</footer>
+
+      <footer class="menu-bottom">
+        <div class="menu-files">
+          <button id="menu-load" type="button" class="m-link">Load saved session or scenario</button>
+          <input id="menu-load-file" type="file" accept=".json,application/json" hidden />
+          <span id="menu-error" class="menu-error" role="alert"></span>
+        </div>
+        <div id="menu-summary" class="menu-summary"></div>
+        <button id="menu-start" type="button" class="m-start">Start session</button>
+      </footer>
+    </section>
+
+    <main class="console" id="atc-console" hidden>
+      <section class="scope" aria-label="Radar">
+        <div class="view">
+          <canvas id="radar"></canvas>
+          <!-- Floats over the scope so showing or hiding it never resizes the map. -->
+          <div id="quick" class="quick" aria-label="Quick commands for the selected aircraft" hidden></div>
+        </div>
+        <form id="command-form" class="command" autocomplete="off">
+          <label for="command">Command</label>
+          <input id="command" spellcheck="false" placeholder="Click an aircraft, then e.g. C 240 C 3 S 210, I 27 or L 27" />
+          <button type="submit">Send</button>
+        </form>
+      </section>
+
+      <aside class="panel">
+        <header class="session">
+          <button id="menu-btn" type="button" class="menu-btn" aria-label="Main menu">&#8592; Menu</button>
+          <div class="session-info">
+            <div id="session-airport" class="session-airport">--</div>
+            <div id="session-meta" class="session-meta">--</div>
+          </div>
+        </header>
+        <div class="files">
+          <button id="save" type="button" class="link">Save session</button>
+          <button id="new-game" type="button" class="link" title="Same airport and settings, new traffic">Restart</button>
+          <button id="settings" type="button" class="settings-btn" aria-label="Settings">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.6 7.6 0 0 0 0 2l-2.2 1.6 2 3.5 2.5-1a7.4 7.4 0 0 0 1.7 1l.4 2.6h4l.4-2.6a7.4 7.4 0 0 0 1.7-1l2.5 1 2-3.5zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)"/></svg>
+            Settings
+          </button>
+        </div>
+
+        <div class="clock-row">
+          <div>
+            <div id="clock" class="clock">00:00:00</div>
+            <div id="rate" class="rate">1.0× real time</div>
+          </div>
+          <figure class="wind" aria-label="Wind">
+            <svg id="wind-dial" viewBox="-50 -50 100 100" width="84" height="84" aria-hidden="true">
+              <circle r="40" class="dial-face" />
+              <g id="dial-ticks"></g>
+              <text y="-43" class="dial-label">N</text>
+              <text x="46" y="3.5" class="dial-label">E</text>
+              <text y="50" class="dial-label">S</text>
+              <text x="-46" y="3.5" class="dial-label">W</text>
+              <g id="wind-arrow">
+                <line y1="-36" y2="18" class="dial-arrow" />
+                <path d="M0 26 L-6 14 L6 14 Z" class="dial-head" />
+                <circle cy="-36" r="3.2" class="dial-from" />
+              </g>
+            </svg>
+            <figcaption>
+              <div id="wind-text" class="wind-text">---° -- kt</div>
+              <div id="runways-in-use" class="in-use">In use: --</div>
+            </figcaption>
+          </figure>
+        </div>
+
+        <div class="speed" role="group" aria-label="Simulation speed">
+          <button type="button" data-speed="0" aria-pressed="false">Pause</button>
+          <button type="button" data-speed="1" aria-pressed="true">1×</button>
+          <button type="button" data-speed="2" aria-pressed="false">2×</button>
+          <button type="button" data-speed="4" aria-pressed="false">4×</button>
+          <button type="button" data-speed="8" aria-pressed="false">8×</button>
+          <button type="button" data-speed="16" aria-pressed="false">16×</button>
+          <button type="button" data-speed="max" aria-pressed="false">Max</button>
+        </div>
+
+        <dl id="stats" class="stats"></dl>
+
+        <section class="bay" aria-labelledby="arr-h">
+          <h2 id="arr-h">Arrivals <span id="arr-count" class="count"></span></h2>
+          <ol id="arrivals" class="strips"></ol>
+        </section>
+        <section class="bay" aria-labelledby="dep-h">
+          <h2 id="dep-h">Departures <span id="dep-count" class="count"></span></h2>
+          <ol id="departures" class="strips"></ol>
+        </section>
+
+        <h2>Messages</h2>
+        <ol id="log" class="log" aria-live="polite"></ol>
+
+        <details class="help">
+          <summary>Commands</summary>
+          <table>
+            <tr><td><code>C 240</code></td><td>Turn to heading 240 (000 to 360; add L or R to force the turn)</td></tr>
+            <tr><td><code>C 3</code></td><td>Climb or descend to 3,000 ft (add X to expedite)</td></tr>
+            <tr><td><code>C PUNE</code></td><td>Direct to a fix; list several for a route: <code>C OSKAR LOTAV</code></td></tr>
+            <tr><td><code>S 210</code></td><td>Speed 210 kt</td></tr>
+            <tr><td><code>I 27</code></td><td>Cleared to intercept: joins the centreline by itself (up to 30°), holds altitude until established, then follows the glidepath. Runway in use, within 60° of its heading, at or below 3,000 ft</td></tr>
+            <tr><td><code>L 27</code></td><td>Cleared to land. Given after <code>I</code>, it must come by 4 nm out or the aircraft goes around. Given first, it covers the approach too</td></tr>
+            <tr><td><code>W</code></td><td>Line up and wait (<code>W 32</code> to use another runway)</td></tr>
+            <tr><td><code>T</code></td><td>Cleared for takeoff (<code>T 32</code> for another runway)</td></tr>
+            <tr><td><code>H</code></td><td>Hold at present position; <code>H OSKAR</code> holds at a fix. Right turns, 1-minute legs; add <code>L</code> for left turns</td></tr>
+            <tr><td><code>A</code></td><td>Go around (or cancel a landing clearance not yet on final)</td></tr>
+          </table>
+          <p>
+            Chain clauses: <code>IGO451 C PUNE C 11 T</code>. Departures wait at their runway until you line them up
+            (<code>W</code>) or clear them for takeoff (<code>T</code>); they must leave through their exit fix (amber
+            ring when selected) at or above the strip's altitude. Keep aircraft 3 nm or 1,000 ft apart: orange means a conflict is
+            predicted within a minute, red means separation is lost. Wind decides which runways are in use: more
+            than 5 kt of tailwind and a runway closes. Session seed <span id="seed"></span>.
+          </p>
+        </details>
+        <p class="version">ATC Simulator <span id="version">0.8.0</span></p>
+      </aside>
     </main>
+
+    <main class="console" id="ground-console" hidden>
+      <section class="scope" aria-label="Ground radar">
+        <div class="view">
+          <canvas id="g-radar"></canvas>
+          <div id="g-actions" class="quick" aria-label="Actions for the selected aircraft" hidden></div>
+        </div>
+        <form id="g-form" class="command" autocomplete="off">
+          <label for="g-command">Command</label>
+          <input id="g-command" spellcheck="false" placeholder="Click an aircraft, then e.g. PUSH E, TAXI A5 VIA A, CROSS" />
+          <button type="submit">Send</button>
+        </form>
+      </section>
+
+      <aside class="panel">
+        <header class="session">
+          <button id="g-menu-btn" type="button" class="menu-btn" aria-label="Main menu">&#8592; Menu</button>
+          <div class="session-info">
+            <div id="g-session-airport" class="session-airport">--</div>
+            <div id="g-session-meta" class="session-meta">--</div>
+          </div>
+        </header>
+        <div class="files">
+          <button id="g-new" type="button" class="link" title="Same airport and settings, new traffic">Restart</button>
+          <button id="g-settings" type="button" class="settings-btn" aria-label="Settings">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.6 7.6 0 0 0 0 2l-2.2 1.6 2 3.5 2.5-1a7.4 7.4 0 0 0 1.7 1l.4 2.6h4l.4-2.6a7.4 7.4 0 0 0 1.7-1l2.5 1 2-3.5zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)"/></svg>
+            Settings
+          </button>
+        </div>
+
+        <div class="clock-row">
+          <div>
+            <div id="g-clock" class="clock">00:00:00</div>
+            <div id="g-rate" class="rate">1× real time</div>
+          </div>
+          <figure class="wind" aria-label="Wind">
+            <svg viewBox="-50 -50 100 100" width="84" height="84" aria-hidden="true">
+              <circle r="40" class="dial-face" />
+              <g id="g-dial-ticks"></g>
+              <text y="-43" class="dial-label">N</text>
+              <text x="46" y="3.5" class="dial-label">E</text>
+              <text y="50" class="dial-label">S</text>
+              <text x="-46" y="3.5" class="dial-label">W</text>
+              <g id="g-wind-arrow">
+                <line y1="-36" y2="18" class="dial-arrow" />
+                <path d="M0 26 L-6 14 L6 14 Z" class="dial-head" />
+                <circle cy="-36" r="3.2" class="dial-from" />
+              </g>
+            </svg>
+            <figcaption>
+              <div id="g-wind" class="wind-text">---° -- kt</div>
+              <div id="g-runway" class="in-use">Runway in use: --</div>
+            </figcaption>
+          </figure>
+        </div>
+
+        <div class="speed speed-5" role="group" aria-label="Simulation speed">
+          <button type="button" data-gspeed="0" aria-pressed="false">Pause</button>
+          <button type="button" data-gspeed="1" aria-pressed="true">1×</button>
+          <button type="button" data-gspeed="2" aria-pressed="false">2×</button>
+          <button type="button" data-gspeed="4" aria-pressed="false">4×</button>
+          <button type="button" data-gspeed="8" aria-pressed="false">8×</button>
+        </div>
+
+        <dl id="g-stats" class="stats"></dl>
+
+        <section class="bay" aria-labelledby="g-dep-h">
+          <h2 id="g-dep-h">Departures <span id="g-dep-count" class="count"></span></h2>
+          <ol id="g-departures" class="strips"></ol>
+        </section>
+        <section class="bay" aria-labelledby="g-arr-h">
+          <h2 id="g-arr-h">Arrivals <span id="g-arr-count" class="count"></span></h2>
+          <ol id="g-arrivals" class="strips"></ol>
+        </section>
+
+        <h2>Messages</h2>
+        <ol id="g-log" class="log" aria-live="polite"></ol>
+
+        <details class="help">
+          <summary>Ground commands</summary>
+          <table>
+            <tr><td><code>PUSH E</code></td><td>Push back from the stand, ending up facing east (or W, N, S where the apron allows)</td></tr>
+            <tr><td><code>TAXI A5</code></td><td>Taxi to holding point A5 by the shortest allowed route; <code>TAXI A5 VIA A</code> follows taxiway A. Arrivals: <code>TAXI S3</code> to their stand</td></tr>
+            <tr><td><code>HOLD</code></td><td>Hold position; <code>CONT</code> to continue</td></tr>
+            <tr><td><code>CROSS</code></td><td>Ask the tower to cross the runway ahead; the aircraft holds short until the tower approves</td></tr>
+          </table>
+          <p>
+            Or select an aircraft and use the buttons over the map: <em>Click a route</em> lets you click points on the
+            taxiways in order and shows the route before you send it. You are the ground controller: the tower lines up
+            and launches departures waiting at the holding point of the runway in use, lands arrivals and turns them off
+            the runway; you take them to their stand. Keep aircraft apart: closer than 40 m is a conflict (-20).
+            Departure airborne +10, arrival on stand +10, go-around -5. Runway 27 departures hold at A5, 09 at A1;
+            cargo stands are south of the runway, so cargo traffic has to cross it.
+          </p>
+        </details>
+        <p class="version">ATC Simulator <span class="version-number">0.8.0</span></p>
+      </aside>
+    </main>
+    <!-- Shared by both modes, so it lives outside the consoles. -->
+    <dialog id="settings-dialog" class="settings" aria-label="Settings"></dialog>
+
+    <dialog id="leave-dialog" class="settings leave" aria-labelledby="leave-h">
+      <h2 id="leave-h">Return to the main menu?</h2>
+      <p>This session ends. To change the airport, position or difficulty, start a new one from the menu.</p>
+      <div class="settings-actions">
+        <button id="leave-cancel" type="button" class="link">Keep playing</button>
+        <button id="leave-save" type="button" class="ghost">Save, then leave</button>
+        <button id="leave-go" type="button" class="primary">Leave session</button>
+      </div>
+    </dialog>
+
+    <dialog id="help-dialog" class="settings help-dialog" aria-labelledby="help-h">
+      <div class="settings-head">
+        <h2 id="help-h">How to play</h2>
+        <button id="help-close" type="button" class="ghost">Close</button>
+      </div>
+      <div class="help-cols">
+        <section>
+          <h3>Approach radar</h3>
+          <p>Click an aircraft (blip, label or strip), then use the buttons over the scope or type. Chain clauses: <code>IGO451 C PUNE C 11 T</code>.</p>
+          <table>
+            <tr><td><code>C 240</code></td><td>Turn to heading 240</td></tr>
+            <tr><td><code>C 3</code></td><td>Climb or descend to 3,000 ft</td></tr>
+            <tr><td><code>C PUNE</code></td><td>Direct to a fix</td></tr>
+            <tr><td><code>S 210</code></td><td>Speed 210 kt</td></tr>
+            <tr><td><code>I 27</code> / <code>L 27</code></td><td>Intercept / cleared to land runway 27</td></tr>
+            <tr><td><code>W</code> / <code>T</code></td><td>Line up and wait / cleared for takeoff</td></tr>
+            <tr><td><code>H</code> / <code>A</code></td><td>Hold / go around</td></tr>
+          </table>
+          <p>Keep aircraft 3 nm or 1,000 ft apart. Orange: a conflict is predicted within a minute. Red: separation is lost.</p>
+        </section>
+        <section>
+          <h3>Ground</h3>
+          <p>Push departures back and taxi them to the runway; taxi arrivals to their stand. The tower and the air are automatic.</p>
+          <table>
+            <tr><td><code>PUSH E</code></td><td>Push back, ending up facing east</td></tr>
+            <tr><td><code>TAXI A5</code></td><td>Taxi to holding point A5 (<code>VIA A</code> to choose the route)</td></tr>
+            <tr><td><code>HOLD</code> / <code>CONT</code></td><td>Hold position / continue</td></tr>
+            <tr><td><code>CROSS</code></td><td>Ask the tower to cross the runway</td></tr>
+          </table>
+          <h3>Scoring</h3>
+          <table>
+            <tr><td>Landing, departure, arrival on stand</td><td>+10</td></tr>
+            <tr><td>Go-around</td><td>-5</td></tr>
+            <tr><td>Leaving the airspace wrongly</td><td>-10</td></tr>
+            <tr><td>Loss of separation, ground conflict</td><td>-20</td></tr>
+          </table>
+        </section>
+      </div>
+    </dialog>
+    <script>
+"use strict";(()=>{var Mi=Object.defineProperty;var Ri=(n,t,e)=>t in n?Mi(n,t,{enumerable:!0,configurable:!0,writable:!0,value:e}):n[t]=e;var g=(n,t,e)=>Ri(n,typeof t!="symbol"?t+"":t,e);var U="EUROCONTROL APD (via SKYbrary)",P=[{type:"AT76",name:"ATR 72-600",category:"medium",engines:"turboprop",vapp:113,v2:113,takeoffDistance:1279,landingDistance:915,climbRate:1355,descentRate:1500,maxSpeed:240,maxAltitude:25e3,sources:"Vapp, field lengths, climb: ATR 72-600 factsheet. V2: "+U+" for the ATR 72-210 (estimate for the -600). Descent: estimate."},{type:"DH8D",name:"De Havilland Dash 8-400",category:"medium",engines:"turboprop",vapp:120,v2:125,takeoffDistance:1220,landingDistance:1293,climbRate:2e3,descentRate:2e3,maxSpeed:270,maxAltitude:27e3,sources:"Field lengths: "+U+". Vapp, V2, climb, descent: estimates (not published in sources read)."},{type:"CRJ9",name:"Bombardier CRJ900",category:"medium",engines:"jet",vapp:140,v2:145,takeoffDistance:1778,landingDistance:1596,climbRate:2500,descentRate:2e3,maxSpeed:290,maxAltitude:41e3,sources:"Field lengths: Bombardier figures via flyradius.com. Vapp, V2, climb, descent: estimates."},{type:"E75L",name:"Embraer 175",category:"medium",engines:"jet",vapp:128,v2:140,takeoffDistance:1724,landingDistance:1259,climbRate:3e3,descentRate:2e3,maxSpeed:290,maxAltitude:41e3,sources:"Field lengths: Embraer E175 specification. Vapp, V2, climb: estimates from the E170 in "+U+" (124 kt, 138 kt, 3,400 ft/min). Descent: estimate."},{type:"A320",name:"Airbus A320",category:"medium",engines:"jet",vapp:137,v2:145,takeoffDistance:2100,landingDistance:1440,climbRate:2500,descentRate:2e3,maxSpeed:300,maxAltitude:39e3,sources:"Vapp, V2, landing distance, climb: "+U+". Take-off distance, descent: estimates."},{type:"A20N",name:"Airbus A320neo",category:"medium",engines:"jet",vapp:137,v2:145,takeoffDistance:1950,landingDistance:1440,climbRate:2500,descentRate:2e3,maxSpeed:300,maxAltitude:39e3,sources:"Vapp, V2, landing distance, climb: "+U+". Take-off distance: aerocorner.com. Descent: estimate."},{type:"A321",name:"Airbus A321",category:"medium",engines:"jet",vapp:134,v2:145,takeoffDistance:2210,landingDistance:1600,climbRate:2500,descentRate:2500,maxSpeed:300,maxAltitude:39e3,sources:U+" (all figures)."},{type:"A21N",name:"Airbus A321neo",category:"medium",engines:"jet",vapp:134,v2:145,takeoffDistance:2210,landingDistance:1600,climbRate:2500,descentRate:2500,maxSpeed:300,maxAltitude:39e3,sources:U+" (all figures)."},{type:"B738",name:"Boeing 737-800",category:"medium",engines:"jet",vapp:142,v2:145,takeoffDistance:2300,landingDistance:1600,climbRate:3e3,descentRate:2500,maxSpeed:300,maxAltitude:41e3,sources:"Vapp: Boeing (FAA reference code and approach speeds). Others: "+U+"; descent estimate."},{type:"B739",name:"Boeing 737-900ER",category:"medium",engines:"jet",vapp:144,v2:149,takeoffDistance:2300,landingDistance:1700,climbRate:3e3,descentRate:2500,maxSpeed:300,maxAltitude:41e3,sources:"Vapp: Boeing. Others: "+U+"; descent estimate."},{type:"A333",name:"Airbus A330-300",category:"heavy",engines:"jet",vapp:130,v2:145,takeoffDistance:2300,landingDistance:1700,climbRate:2e3,descentRate:2e3,maxSpeed:310,maxAltitude:41e3,sources:U+"; descent estimate."},{type:"A359",name:"Airbus A350-900",category:"heavy",engines:"jet",vapp:145,v2:150,takeoffDistance:2600,landingDistance:1600,climbRate:3e3,descentRate:1500,maxSpeed:310,maxAltitude:43e3,sources:"Vapp: FAA AC 150/5300-13A (via Wikipedia). V2, climb, descent: "+U+". Field lengths: estimates (the APD entry looked inconsistent)."},{type:"B788",name:"Boeing 787-8",category:"heavy",engines:"jet",vapp:145,v2:165,takeoffDistance:3100,landingDistance:1520,climbRate:2700,descentRate:1500,maxSpeed:310,maxAltitude:43e3,sources:"Vapp: Boeing. Others: "+U+"; descent estimate."},{type:"B789",name:"Boeing 787-9",category:"heavy",engines:"jet",vapp:153,v2:165,takeoffDistance:3100,landingDistance:1600,climbRate:2700,descentRate:1500,maxSpeed:310,maxAltitude:43e3,sources:"Vapp: Boeing. Others: estimates from the 787-8."},{type:"B77W",name:"Boeing 777-300ER",category:"heavy",engines:"jet",vapp:150,v2:168,takeoffDistance:3e3,landingDistance:1800,climbRate:3e3,descentRate:1500,maxSpeed:310,maxAltitude:43e3,sources:"Vapp: Boeing. Others: "+U+"."}],vn=1852/3600,$i=300,Ci=1.4,Li=.85,Ni=n=>Math.round(n/10)*10;function An(n){let t=n.v2-5,e=n.vapp-5,r=n.takeoffDistance*Li,i=(n.landingDistance-$i)*Ci,s=l=>l*vn,a=l=>l/vn,o=n.engines==="turboprop",d=n.category==="heavy";return{turnRate:3,climbRate:n.climbRate,descentRate:n.descentRate,accel:o?1.5:d?1:1.2,decel:o?1.5:d?1:1.2,minSpeed:Ni(n.vapp+25),maxSpeed:n.maxSpeed,approachSpeed:n.vapp,touchdownSpeed:e,maxAltitude:n.maxAltitude,takeoffAccel:Math.round(a(s(t)**2/(2*r))*100)/100,rotateSpeed:t,rolloutDecel:Math.round(a(s(e)**2/(2*i))*100)/100}}var ie=new Map(P.map(n=>[n.type,An(n)])),Sn=new Map(P.map(n=>[n.type,n])),wt={light:"AT76",medium:"A320",heavy:"B77W"},kn={light:ie.get(wt.light),medium:ie.get(wt.medium),heavy:ie.get(wt.heavy)};function L(n){return ie.get(n.type)??kn[n.category]}function ft(n){return(Sn.get(n.type)??Sn.get(wt[n.category]))?.takeoffDistance??2500}var _a=P.map(n=>({type:n.type,category:n.category}));var Fe={light:0,medium:1,heavy:2};function jt(n,t,e){return Fe[t]>=Fe[n]?0:120+(e?60:0)}function Oe(n){return Fe[n]}var Ge=Math.PI/180,En=6076.12;function N(n){let t=n%360;return t<=0&&(t+=360),t}function W(n,t){let e=(t-n)%360;return e>180&&(e-=360),e<=-180&&(e+=360),e}function B(n,t,e,r){return N(Math.atan2(e-n,r-t)/Ge)}function K(n,t,e,r){return Math.hypot(e-n,r-t)}function at(n){return{dx:Math.sin(n*Ge),dy:Math.cos(n*Ge)}}function vt(n,t,e,r,i){let{dx:s,dy:a}=at(i),o=n-e,d=t-r,l=-(o*s+d*a),h=o*a-d*s;return{alongTrack:l,crossTrack:h}}var Tn=Math.PI/180;function Mn(n,t,e){n.turnAltitude>0&&n.altitude>=n.turnAltitude&&(n.turnAltitude=0);let r=W(n.heading,n.targetHeading);if(!(n.turnAltitude>0))if(r!==0){let d;n.turnDirection==="R"?d=1:n.turnDirection==="L"?d=-1:d=r>0?1:-1;let l=d>0?(r+360)%360:(-r+360)%360,h=t.turnRate*e;l<=h?(n.heading=N(n.targetHeading),n.turnDirection=null):n.heading=N(n.heading+d*h)}else n.turnDirection=null;let i=n.targetSpeed-n.speed;i>0?n.speed=Math.min(n.targetSpeed,n.speed+t.accel*e):i<0&&(n.speed=Math.max(n.targetSpeed,n.speed-t.decel*e));let s=n.targetAltitude-n.altitude;if(s!==0){let d=n.expedite?2:1;s>0?n.altitude=Math.min(n.targetAltitude,n.altitude+t.climbRate/60*d*e):n.altitude=Math.max(n.targetAltitude,n.altitude-t.descentRate/60*d*e),n.altitude===n.targetAltitude&&(n.expedite=!1)}let a=n.speed/3600*e,o=n.heading*Tn;n.x+=Math.sin(o)*a,n.y+=Math.cos(o)*a}function Rn(n,t){return n/3600/(t*Tn)}var Ii=Math.PI/180,Cn=5,Di=3;function I(n,t){let e=t.toUpperCase();return n.runways.find(r=>r.id===e)}function q(n,t){let e=t.toUpperCase();return n.fixes.find(r=>r.name===e)}function St(n){return n.id<n.oppositeId?`${n.id}/${n.oppositeId}`:`${n.oppositeId}/${n.id}`}function We(n,t){let e=[St(t)],r=$n(n,t);for(let i of n.runways){let s=St(i);e.includes(s)||_i(r,$n(n,i))&&e.push(s)}return e}function At(n,t){return-t.speed*Math.cos(W(n.heading,t.direction)*Ii)}function se(n,t,e){return n.runways.filter(r=>{let i=At(r,t),s=e===void 0||e.includes(r.id);return i<=(s?Cn:Di)}).map(r=>r.id)}function Ue(n,t,e,r=0){return Math.abs(t)<=n.halfWidth+r&&Math.abs(e)<=n.halfHeight+r}function $n(n,t){let e=I(n,t.oppositeId)??t;return{x1:t.thresholdX,y1:t.thresholdY,x2:e.thresholdX,y2:e.thresholdY}}function _i(n,t){let e=(n.x2-n.x1)*(t.y2-t.y1)-(n.y2-n.y1)*(t.x2-t.x1);if(e===0)return!1;let r=((t.x1-n.x1)*(t.y2-t.y1)-(t.y1-n.y1)*(t.x2-t.x1))/e,i=((t.x1-n.x1)*(n.y2-n.y1)-(t.y1-n.y1)*(n.x2-n.x1))/e;return r>=0&&r<=1&&i>=0&&i<=1}var Yt=Math.PI/180,Hn=Math.tan(3*Yt)*En,Pi=30,Ln=60,Nn=3e3,kt=4,Be=30,Fn=3,On=.5,In=200,Hi=180,Fi=5,Gn=60,Dn=30,tt={kind:"none"};function Wn(n,t,e,r,i){if(n.status!=="airborne")return{ok:!1,reason:"not airborne"};let s=I(t,e);if(!s){let l=t.runways.map(h=>h.id).join(", ");return{ok:!1,reason:`unknown runway ${e} (available: ${l})`}}let a=At(s,r);return i.includes(s.id)?vt(n.x,n.y,s.thresholdX,s.thresholdY,s.heading).alongTrack<On?{ok:!1,reason:`already past the runway ${s.id} threshold`}:Math.abs(W(n.heading,s.heading))>Ln?{ok:!1,reason:`heading ${Pn(n.heading)} is more than ${Ln}\xB0 from runway ${s.id} (${Pn(s.heading)})`}:n.altitude>t.elevation+Nn+1?{ok:!1,reason:`too high: must be at or below ${t.elevation+Nn} ft`}:{ok:!0,runway:s}:{ok:!1,reason:`runway ${s.id} not in use, tailwind ${Math.round(a)} kt`}}function Un(n,t,e){if(n.lateralMode!=="approach"&&n.lateralMode!=="localizer"||n.runway===null)return tt;let r=I(t,n.runway);if(!r)return tt;let i=vt(n.x,n.y,r.thresholdX,r.thresholdY,r.heading);if(n.lateralMode==="approach"){let o=n.lastCrossTrack;if(n.lastCrossTrack=i.crossTrack,i.alongTrack<=On||i.alongTrack>Pi)return tt;let d=W(r.heading,n.heading),l=Math.abs(d);if(l<=90){let p=i.crossTrack*Math.sin(d*Yt)<0,f=Rn(n.speed,e.turnRate)*(1-Math.cos(l*Yt))+.02,c=o!==null&&Math.sign(o)!==Math.sign(i.crossTrack)&&o!==0;if(p&&Math.abs(i.crossTrack)<=f||c||Math.abs(i.crossTrack)<.02)return n.lateralMode="localizer",n.turnDirection=null,_n(n,r.heading,i.crossTrack),{kind:"captured",runway:r.id}}let h=W(r.heading,n.targetHeading);return Oi(i.alongTrack,i.crossTrack,h)||(n.targetHeading=Gi(r.heading,i.crossTrack),n.turnDirection=null),tt}_n(n,r.heading,i.crossTrack);let s=t.elevation+Math.max(0,i.alongTrack)*Hn;n.targetAltitude=Math.min(n.targetAltitude,s),n.expedite=!1;let a=i.alongTrack>Fi?Hi:e.approachSpeed;return n.targetSpeed=Math.min(n.targetSpeed,a),tt}function Bn(n,t,e=kt){if(n.lateralMode!=="localizer"&&n.lateralMode!=="approach"||n.runway===null)return tt;let r=I(t,n.runway);if(!r)return tt;let i=vt(n.x,n.y,r.thresholdX,r.thresholdY,r.heading);if(n.lateralMode==="approach")return i.alongTrack>0?tt:{kind:"missed",runway:r.id,reason:"reached the runway without lining up"};if(e!==null&&!n.landingCleared&&i.alongTrack<=e)return{kind:"missed",runway:r.id,reason:`not cleared to land by ${e} nm`};if(i.alongTrack>0)return tt;let s=n.altitude-t.elevation;if(s<=In&&Math.abs(i.crossTrack)<.3)return{kind:"landed",runway:r.id};let a=s>In?`too high at threshold (${Math.round(s)} ft)`:"not aligned with runway";return{kind:"missed",runway:r.id,reason:a}}function Xn(n,t,e){n.lateralMode="heading",n.route=[],n.hold=null,n.runway=null,n.landingCleared=!1,n.lastCrossTrack=null,n.targetHeading=N(e),n.turnDirection=null,n.targetAltitude=t.elevation+3e3,n.targetSpeed=Math.max(n.targetSpeed,200)}function Oi(n,t,e){if(Math.abs(e)>=90)return!1;let r=Math.sin(e*Yt);if(t*r>=0)return!1;let i=Math.abs(t/r);return n-i*Math.cos(e*Yt)>=Fn}function Gi(n,t){let e=Math.max(-Be,Math.min(Be,-t*Gn));return N(n+e)}function _n(n,t,e){let r=Math.max(-Dn,Math.min(Dn,-e*Gn));n.targetHeading=N(t+r)}function Pn(n){return String(Math.round(N(n))).padStart(3,"0")}var Wi=.8,Ui=3;function jn(n,t){if(n.lateralMode!=="direct")return null;let e=null;for(;n.route.length>0;){let r=q(t,n.route[0]);if(!r){n.route.shift();continue}let i=K(n.x,n.y,r.x,r.y),s=B(n.x,n.y,r.x,r.y),a=Math.abs(W(n.heading,s))>90;if(i<Wi||a&&i<Ui&&n.turnAltitude===0){e=n.route.shift()??null;continue}return n.targetHeading=s,n.turnDirection=null,e}return n.lateralMode="heading",n.targetHeading=n.heading,e}var ae=60,Bi=.8,Xi=3,ji=60,Yn=40,Yi=30;function Vn(n,t,e,r){let i=e===null,s=i?n.heading:B(n.x,n.y,t.x,t.y),a={fix:e,x:t.x,y:t.y,inbound:N(s),turn:r,phase:i?"turnOut":"entry",timer:0};return n.lateralMode="hold",n.hold=a,n.route=[],n.turnDirection=null,a}function Kn(n,t){let e=n.hold;if(n.lateralMode!=="hold"||!e)return;let r=N(e.inbound+180);if(e.phase==="entry"){let i=K(n.x,n.y,e.x,e.y),s=B(n.x,n.y,e.x,e.y),a=Math.abs(W(n.heading,s))>90;if(i<Bi||a&&i<Xi)e.phase="turnOut";else{n.targetHeading=s,n.turnDirection=null;return}}switch(e.phase){case"turnOut":n.targetHeading=r,n.turnDirection=e.turn,Math.abs(W(n.heading,r))<1&&(e.phase="outbound",e.timer=Math.round(ae/t));break;case"outbound":n.targetHeading=r,n.turnDirection=null,--e.timer<=0&&(e.phase="turnIn");break;case"turnIn":n.targetHeading=e.inbound,n.turnDirection=e.turn,Math.abs(W(n.heading,e.inbound))<=Yi&&(e.phase="inbound");break;case"inbound":{let i=vt(n.x,n.y,e.x,e.y,e.inbound),s=Math.max(-Yn,Math.min(Yn,-i.crossTrack*ji));n.targetHeading=N(e.inbound+s),n.turnDirection=null,i.alongTrack<=0&&(e.phase="turnOut");break}}}var Et={lateralNm:3,verticalFt:1e3},oe=1e3;function qn(n,t,e=0,r=Et){let i=r.lateralNm,s=e+oe;for(let l of n)l.inConflict=!1;let a=new Set,o=[],d=n.length;for(let l=0;l<d;l++){let h=n[l];if(h.status==="airborne")for(let p=l+1;p<d;p++){let f=n[p];if(f.status!=="airborne"||h.altitude<s&&f.altitude<s)continue;let c=Math.abs(h.altitude-f.altitude);if(c>=r.verticalFt)continue;let u=h.x-f.x,m=h.y-f.y;if(Math.abs(u)>=i||Math.abs(m)>=i)continue;let b=Math.hypot(u,m);if(b>=i)continue;h.inConflict=!0,f.inConflict=!0;let y=h.id<f.id?`${h.id}-${f.id}`:`${f.id}-${h.id}`;a.add(y),t.has(y)||o.push({a:h,b:f,distance:b,verticalFt:c})}}t.clear();for(let l of a)t.add(l);return o}var ue=60,zn=5,Jn=Math.PI/180,Vi=620/3600,Vt=new Float64Array(64),le=new Float64Array(64);function Zn(n,t,e,r=Et,i=ue){for(let h of n)h.conflictWarning=!1;let s=r.lateralNm+Vi*i;Vt.length<n.length&&(Vt=new Float64Array(n.length*2),le=new Float64Array(n.length*2));for(let h=0;h<n.length;h++){let p=n[h];Vt[h]=Math.sin(p.heading*Jn)*p.speed/3600,le[h]=Math.cos(p.heading*Jn)*p.speed/3600}let a=e+oe,o=new Set,d=[],l=n.length;for(let h=0;h<l;h++){let p=n[h];if(p.status==="airborne")for(let f=h+1;f<l;f++){let c=n[f];if(c.status!=="airborne"||p.inConflict&&c.inConflict||Math.abs(p.x-c.x)>s||Math.abs(p.y-c.y)>s)continue;let u=Ki(p,c,Vt[h],le[h],Vt[f],le[f],a,r,i);if(u===null)continue;p.conflictWarning=!0,c.conflictWarning=!0;let m=p.id<c.id?`${p.id}-${c.id}`:`${c.id}-${p.id}`;o.add(m),t.has(m)||d.push({a:p,b:c,inSeconds:u})}}t.clear();for(let h of o)t.add(h);return d}function Ki(n,t,e,r,i,s,a,o,d){let l=de(n,d),h=de(t,d);if(Math.max(Math.min(n.altitude,l)-Math.max(t.altitude,h),Math.min(t.altitude,h)-Math.max(n.altitude,l))>=o.verticalFt)return null;let f=o.lateralNm*o.lateralNm;for(let c=zn;c<=d;c+=zn){let u=n.x+e*c-(t.x+i*c),m=n.y+r*c-(t.y+s*c);if(u*u+m*m>=f)continue;let b=de(n,c),y=de(t,c);if(!(b<a&&y<a)&&Math.abs(b-y)<o.verticalFt)return c}return null}function de(n,t){let e=L(n),r=n.targetAltitude-n.altitude;if(r===0)return n.altitude;let i=n.expedite?2:1,s=(r>0?e.climbRate:e.descentRate)/60*i,a=Math.min(Math.abs(r),s*t);return n.altitude+Math.sign(r)*a}var ot={landed:10,departed:10,wrongExit:-10,separationLoss:-20,missedApproach:-5,leftAirspace:-10};function Tt(n){return{s:n>>>0}}function F(n){n.s=n.s+1831565813>>>0;let t=n.s;return t=Math.imul(t^t>>>15,t|1),t^=t+Math.imul(t^t>>>7,t|61),((t^t>>>14)>>>0)/4294967296}function ce(n,t,e){return t+Math.floor(F(n)*(e-t+1))}function et(n,t){return t[Math.floor(F(n)*t.length)]}var qi=[4e3,5e3,6e3,7e3,8e3],zi=[9e3,1e4,11e3,12e3],Qn=250,Ji=250,Zi=5e3,tr=500,Qi=8,Mt=4,ts=20,es=12,ns=4,er=20;function nr(n,t,e){return{arrivals:{nextTick:Math.round(n.firstSec/e),spawned:0},departures:{nextTick:Math.round(t.firstSec/e),spawned:0},usedCallsigns:[]}}function rr(n,t,e){return e<n.nextTick?!1:t.max===void 0||n.spawned<t.max}function ir(n,t,e,r,i){let s=t.minIntervalSec+F(e)*(t.maxIntervalSec-t.minIntervalSec);n.nextTick=r+Math.max(1,Math.round(s/i))}function sr(n,t,e,r,i,s,a,o,d){let l=n.arrivals;if(!rr(l,e,s))return null;let{halfWidth:h,halfHeight:p}=r.boundary,f=null;for(let w=0;w<es&&!f;w++){let S=2*(h-Mt),v=2*(p-Mt),A=F(t)*2*(S+v),H,G;A<S?(H=-h+Mt+A,G=p):(A-=S)<v?(H=h,G=p-Mt-A):(A-=v)<S?(H=h-Mt-A,G=-p):(A-=S,H=-h,G=-p+Mt+A);let Xt=et(t,qi);is(H,G,Xt,i)&&(f={x:H,y:G,altitude:Xt})}if(!f)return l.nextTick=s+Math.round(er/a),null;let c=lr(t,r,d),u=dr(t,r,n.usedCallsigns),m=(F(t)*2-1)*ts,b=Math.round(N(B(f.x,f.y,0,0)+m))||360;l.spawned++,ir(l,e,t,s,a);let y=or(o,u,c.type,c.category,s);return Object.assign(y,{isArrival:!0,status:"airborne",x:f.x,y:f.y,altitude:f.altitude,targetAltitude:f.altitude,heading:b,targetHeading:b,speed:Math.min(Qn,L(y).maxSpeed),targetSpeed:Math.min(Qn,L(y).maxSpeed)}),{aircraft:y,where:as(f.x,f.y)}}function ar(n,t,e,r,i,s,a,o,d,l){let h=n.departures;if(!rr(h,e,a))return null;let p=r.fixes.filter(v=>v.kind==="exit"),f=r.preferredRunways.find(v=>s.includes(v))??s[0],c=f?I(r,f):void 0,u=i.filter(v=>v.status==="waiting"||v.status==="lineup").length;if(!c||p.length===0||u>=ns)return h.nextTick=a+Math.round(er/o),null;let m=lr(t,r,l),b=dr(t,r,n.usedCallsigns),y=et(t,p),w=et(t,zi);h.spawned++,ir(h,e,t,a,o);let S=or(d,b,m.type,m.category,a);return Object.assign(S,{isArrival:!1,status:"waiting",x:c.thresholdX,y:c.thresholdY,altitude:r.elevation,targetAltitude:Math.max(Zi,rs(r.elevation+2e3)),heading:c.heading,targetHeading:c.heading,speed:0,targetSpeed:Math.min(Ji,L(S).maxSpeed),runway:c.id,exitFix:y.name,exitAltitude:w}),{aircraft:S,where:c.id}}function or(n,t,e,r,i){return{id:n,callsign:t,type:e,category:r,isArrival:!0,status:"airborne",x:0,y:0,altitude:0,heading:360,speed:0,targetHeading:360,turnDirection:null,targetAltitude:0,targetSpeed:0,expedite:!1,lateralMode:"heading",route:[],runway:null,lastCrossTrack:null,landingCleared:!1,fromIntersection:null,turnAltitude:0,hold:null,exitFix:null,exitAltitude:0,inConflict:!1,conflictWarning:!1,spawnTick:i}}function lr(n,t,e){let r=P.map(a=>{let o=t.fleet?t.fleet[a.type]??0:1;return a.engines==="turboprop"&&(o*=e?.turboprop??1),a.category==="heavy"&&(o*=e?.heavy??1),Math.max(0,o)}),i=r.reduce((a,o)=>a+o,0);if(i<=0)return et(n,P);let s=F(n)*i;for(let a=0;a<P.length;a++)if(s-=r[a],s<0)return P[a];return P[P.length-1]}function rs(n){return Math.ceil(n/1e3)*1e3}function is(n,t,e,r){for(let i of r)if(i.status==="airborne"&&K(n,t,i.x,i.y)<Qi&&Math.abs(i.altitude-e)<1e3)return!1;return!0}var ss=["north","northeast","east","southeast","south","southwest","west","northwest"];function as(n,t){let e=B(0,0,n,t);return ss[Math.round(e/45)%8]}function dr(n,t,e){for(let i=0;i<50;i++){let s=et(n,t.airlines)+String(ce(n,10,999));if(!e.includes(s))return e.push(s),s}let r="XXX"+String(e.length+1e3);return e.push(r),r}var he=60,os=8,ls=1.5,ds=0,Xe={calm:{min:0,max:3,cap:6},light:{min:3,max:9,cap:14},moderate:{min:4,max:16,cap:22},strong:{min:14,max:24,cap:32}};function fe(n,t){if(n.initialWind)return{...n.initialWind};let e=Xe[n.strength??"moderate"];return{direction:Math.round(N(F(t)*360)),speed:Math.round(e.min+F(t)*(e.max-e.min))}}function pe(n,t,e="moderate"){let r=(F(t)*2-1)*os,i=(F(t)*2-1)*ls;n.direction=Math.round(N(n.direction+r)),n.speed=Math.round(Math.min(Xe[e].cap,Math.max(ds,n.speed+i))*10)/10}var _=.5,us=.5,cr=5,cs=600/1852,hs=4,fs=2654435769,nt=class{constructor(t){g(this,"scenario");g(this,"dt",_);g(this,"state");g(this,"rng");g(this,"weatherRng");g(this,"spawner");g(this,"events",[]);g(this,"conflictPairs",new Set);g(this,"warningPairs",new Set);g(this,"nextId",1);g(this,"log",[]);g(this,"lastTakeoff",new Map);g(this,"strips",new Map);this.scenario=t;for(let r of t.airport.runways)this.strips.set(r.id,{strip:St(r),blocking:We(t.airport,r)});this.rng=Tt(t.seed),this.weatherRng=Tt((t.seed^fs)>>>0),this.spawner=nr(t.traffic.arrivals,t.traffic.departures,_);let e=fe(t.weather,this.weatherRng);this.state={tick:0,time:0,aircraft:[],wind:e,runwaysInUse:se(t.airport,e),runwayBusyUntil:{},stats:{score:0,arrivalsSpawned:0,departuresSpawned:0,landed:0,departed:0,wrongExits:0,separationLosses:0,conflictWarnings:0,missedApproaches:0,leftAirspace:0,commandsIssued:0}}}get tick(){return this.state.tick}getState(){return this.state}drainEvents(){let t=this.events;return this.events=[],t}getCommandLog(){return this.log}step(){let{airport:t}=this.scenario,e=this.state,r=e.tick;if(this.scenario.weather.variable&&r>0&&r%Math.round(he/_)===0){pe(e.wind,this.weatherRng,this.scenario.weather.strength);let l=se(t,e.wind,e.runwaysInUse);l.join()!==e.runwaysInUse.join()&&(e.runwaysInUse=l,this.events.push({type:"runwaysChanged",tick:r,inUse:l}))}for(let l of e.aircraft){let h=L(l);if(l.status==="rolling"){this.takeoffRoll(l,r);continue}if(l.status==="rollout"){this.landingRollout(l,r);continue}if(l.status!=="airborne")continue;let p=Un(l,t,h);p.kind==="captured"&&this.events.push({type:"localizerCaptured",tick:r,callsign:l.callsign,runway:p.runway}),jn(l,t),Kn(l,_),Mn(l,h,_)}for(let l of e.aircraft){if(l.status!=="airborne")continue;let h=Bn(l,t,this.landingClearanceNm());if(h.kind==="landed"){let p=I(t,h.runway),f=p?this.runwayBlocker(p,l):null;p&&f?this.missedApproach(l,p,`runway occupied by ${f}`,r):p&&(l.status="rollout",l.altitude=t.elevation,l.targetAltitude=t.elevation,l.heading=p.heading,l.targetHeading=p.heading,l.lateralMode="heading",l.speed=Math.min(l.speed,L(l).touchdownSpeed),l.targetSpeed=0,this.events.push({type:"touchdown",tick:r,callsign:l.callsign,runway:p.id}))}else if(h.kind==="missed"){let p=I(t,h.runway);p&&this.missedApproach(l,p,h.reason,r)}else Ue(t.boundary,l.x,l.y,us)||this.leaveAirspace(l,r)}e.aircraft.some(l=>l.status==="landed"||l.status==="exited")&&(e.aircraft=e.aircraft.filter(l=>l.status!=="landed"&&l.status!=="exited"));let i=this.scenario.options?.separation??Et;for(let l of qn(e.aircraft,this.conflictPairs,t.elevation,i))e.stats.separationLosses++,e.stats.score+=ot.separationLoss,this.events.push({type:"separationLoss",tick:r,a:l.a.callsign,b:l.b.callsign,distance:l.distance,verticalFt:l.verticalFt});let s=this.scenario.options?.conflictLookaheadSec??ue;if(s>0&&r%hs===0)for(let l of Zn(e.aircraft,this.warningPairs,t.elevation,i,s))e.stats.conflictWarnings++,this.events.push({type:"conflictWarning",tick:r,a:l.a.callsign,b:l.b.callsign,inSeconds:l.inSeconds});let{traffic:a}=this.scenario,o=sr(this.spawner,this.rng,a.arrivals,t,e.aircraft,r,_,this.nextId,a.mix);o&&(this.nextId++,e.aircraft.push(o.aircraft),e.stats.arrivalsSpawned++,this.events.push({type:"spawned",tick:r,callsign:o.aircraft.callsign,isArrival:!0,where:o.where}));let d=ar(this.spawner,this.rng,a.departures,t,e.aircraft,e.runwaysInUse,r,_,this.nextId,a.mix);d&&(this.nextId++,e.aircraft.push(d.aircraft),e.stats.departuresSpawned++,this.events.push({type:"spawned",tick:r,callsign:d.aircraft.callsign,isArrival:!1,where:d.where})),e.tick=r+1,e.time=e.tick*_}run(t){for(let e=0;e<t;e++)this.step()}command(t){let e=this.applyCommand(t),r=this.state.tick;return e.ok?(this.log.push({tick:r,command:t}),this.state.stats.commandsIssued++,this.events.push({type:"commandAccepted",tick:r,callsign:t.callsign,message:e.message})):this.events.push({type:"commandRejected",tick:r,callsign:t.callsign,message:e.message}),e}addAircraft(t){let e=t.category??"medium",r=t.speed??250,i={id:this.nextId++,type:wt[e],category:e,isArrival:!0,status:"airborne",speed:r,targetHeading:t.heading,turnDirection:null,targetAltitude:t.altitude,targetSpeed:r,expedite:!1,lateralMode:"heading",route:[],runway:null,lastCrossTrack:null,landingCleared:!1,fromIntersection:null,turnAltitude:0,hold:null,exitFix:null,exitAltitude:0,inConflict:!1,conflictWarning:!1,spawnTick:this.state.tick,...t};return this.state.aircraft.push(i),i}landingClearanceNm(){let t=this.scenario.options;return t?.requireLandingClearance?t.landingClearanceNm??kt:null}landingRollout(t,e){let r=L(t),i=t.speed;t.speed=Math.max(0,t.speed-r.rolloutDecel*_);let s=(i+t.speed)/2/3600*_,a=t.heading*Math.PI/180;if(t.x+=Math.sin(a)*s,t.y+=Math.cos(a)*s,t.speed>0)return;let o=this.state;t.status="landed",o.stats.landed++,o.stats.score+=ot.landed,this.events.push({type:"landed",tick:e,callsign:t.callsign,runway:t.runway??""})}takeoffRoll(t,e){let r=L(t);t.speed=Math.min(r.rotateSpeed,t.speed+r.takeoffAccel*_);let i=t.speed/3600*_,s=t.heading*Math.PI/180;t.x+=Math.sin(s)*i,t.y+=Math.cos(s)*i,t.speed>=r.rotateSpeed&&(t.status="airborne",t.turnAltitude=this.scenario.airport.elevation+tr,t.targetSpeed=Math.max(t.targetSpeed,r.minSpeed),this.events.push({type:"tookOff",tick:e,callsign:t.callsign,runway:t.runway??""}),t.runway=null)}moveToRunway(t,e,r=0){let{airport:i}=this.scenario,s=I(i,e);if(!s)return;let a=t.runway?I(i,t.runway):void 0;(!a||t.targetHeading===a.heading)&&(t.targetHeading=s.heading);let o=s.heading*Math.PI/180;t.runway=s.id,t.x=s.thresholdX+Math.sin(o)*r,t.y=s.thresholdY+Math.cos(o)*r,t.heading=s.heading}runwayLengthM(t){let e=I(this.scenario.airport,t.oppositeId);return e?K(t.thresholdX,t.thresholdY,e.thresholdX,e.thresholdY)*1852:3e3}wakeWait(t,e,r){let i={sec:0,leader:""};for(let s of this.strips.get(e.id)?.blocking??[]){let a=this.lastTakeoff.get(s);if(!a||a.callsign===t.callsign)continue;let o=jt(a.category,t.category,r),d=Math.ceil(o-(this.state.tick-a.tick)*_);d>i.sec&&(i={sec:d,leader:`${a.callsign} (${a.type})`})}return i}missedApproach(t,e,r,i){Xn(t,this.scenario.airport,e.heading);let s=this.state;s.stats.missedApproaches++,s.stats.score+=ot.missedApproach,this.events.push({type:"missedApproach",tick:i,callsign:t.callsign,runway:e.id,reason:r})}leaveAirspace(t,e){let r=this.state;if(t.status="exited",t.isArrival||!t.exitFix){r.stats.leftAirspace++,r.stats.score+=ot.leftAirspace,this.events.push({type:"leftAirspace",tick:e,callsign:t.callsign});return}let i=q(this.scenario.airport,t.exitFix),s=i!==void 0&&K(t.x,t.y,i.x,i.y)<=cr,a=t.altitude>=t.exitAltitude-50;if(s&&a){r.stats.departed++,r.stats.score+=ot.departed,this.events.push({type:"departed",tick:e,callsign:t.callsign,fix:t.exitFix});return}let o=s?`left via ${t.exitFix} at ${Ye(t.altitude)}, needed ${Ye(t.exitAltitude)}`:`left the airspace away from ${t.exitFix}`;r.stats.wrongExits++,r.stats.score+=ot.wrongExit,this.events.push({type:"wrongExit",tick:e,callsign:t.callsign,reason:o})}runwayBlocker(t,e,r=null){let i=this.state,s=this.strips.get(t.id)?.blocking??[],a=t.heading*Math.PI/180;for(let o of i.aircraft){if(o===e||o.runway===null||o.status!=="lineup"&&o.status!=="rolling"&&o.status!=="rollout")continue;let d=this.strips.get(o.runway)?.strip;if(!(d===void 0||!s.includes(d))&&!(r!==null&&o.runway===t.id&&o.status!=="lineup"&&(o.x-t.thresholdX)*Math.sin(a)+(o.y-t.thresholdY)*Math.cos(a)>=r+cs))return o.callsign}return null}applyCommand(t){let e=this.state.aircraft.find(o=>o.callsign===t.callsign);if(!e)return{ok:!1,message:`${t.callsign}: no such aircraft`};let r=L(e),{airport:i}=this.scenario,s=e.status!=="airborne",a=s?" after departure":"";switch(t.type){case"heading":{let o=t.heading;if(!Number.isFinite(o)||o<0||o>360)return{ok:!1,message:`${e.callsign}: invalid heading ${o}`};let d=this.cancelApproach(e);e.lateralMode="heading",e.route=[],e.hold=null,e.targetHeading=N(o),e.turnDirection=t.turn??null;let l=t.turn==="L"?"left ":t.turn==="R"?"right ":"";return{ok:!0,message:`${e.callsign} turn ${l}heading ${je(e.targetHeading)}${a}${d?", approach cancelled":""}`}}case"altitude":{let o=t.altitude;if(!Number.isFinite(o)||o<1e3||o>r.maxAltitude)return{ok:!1,message:`${e.callsign}: altitude must be 1,000 to ${r.maxAltitude.toLocaleString("en-US")} ft`};let d=e.lateralMode==="localizer"?this.cancelApproach(e):!1;e.targetAltitude=o,e.expedite=t.expedite===!0&&o!==e.altitude;let l=s||o>e.altitude?"climb":o<e.altitude?"descend":"maintain";return{ok:!0,message:`${e.callsign} ${l} ${Ye(o)}${a}${e.expedite?", expedite":""}${d?", approach cancelled":""}`}}case"speed":{let o=t.speed,d=e.lateralMode==="localizer"?r.approachSpeed:r.minSpeed;return!Number.isFinite(o)||o<d||o>r.maxSpeed?{ok:!1,message:`${e.callsign}: speed must be ${d} to ${r.maxSpeed} kt (${e.type})`}:(e.targetSpeed=o,{ok:!0,message:`${e.callsign} speed ${o} kt${a}`})}case"direct":{if(t.fixes.length===0)return{ok:!1,message:`${e.callsign}: no fix given`};let o=t.fixes.filter(l=>!q(i,l));if(o.length>0)return{ok:!1,message:`${e.callsign}: unknown fix ${o.join(", ")}`};let d=this.cancelApproach(e);return e.lateralMode="direct",e.hold=null,e.route=t.fixes.map(l=>l.toUpperCase()),e.turnDirection=null,{ok:!0,message:`${e.callsign} direct ${e.route.join(" ")}${a}${d?", approach cancelled":""}`}}case"land":case"intercept":{if(!e.isArrival)return{ok:!1,message:`${e.callsign} is a departure, not landing here`};let o=this.landingClearanceNm()!==null,d=t.type==="land"||!o,l=I(i,t.runway)?.id??t.runway.toUpperCase();if((e.lateralMode==="approach"||e.lateralMode==="localizer")&&e.runway===l)return t.type==="intercept"?{ok:!1,message:`${e.callsign} is already cleared for the approach to runway ${l}`}:e.landingCleared?{ok:!1,message:`${e.callsign} is already cleared to land runway ${l}`}:this.state.runwaysInUse.includes(l)?(e.landingCleared=!0,{ok:!0,message:`${e.callsign} runway ${l}, cleared to land`}):{ok:!1,message:`${e.callsign} unable to land: runway ${l} not in use`};let p=Wn(e,i,t.runway,this.state.wind,this.state.runwaysInUse);return p.ok?(e.lateralMode="approach",e.route=[],e.hold=null,e.runway=p.runway.id,e.landingCleared=d,e.lastCrossTrack=null,p.runway.ils===!1?{ok:!0,message:d?`${e.callsign} cleared visual approach and to land runway ${p.runway.id}`:`${e.callsign} cleared visual approach runway ${p.runway.id}`}:{ok:!0,message:t.type==="land"?`${e.callsign} cleared to land runway ${p.runway.id}`:d?`${e.callsign} cleared to intercept and land runway ${p.runway.id}`:`${e.callsign} cleared to intercept, ILS runway ${p.runway.id}`}):{ok:!1,message:`${e.callsign} unable ${t.type==="land"?"to land":"to intercept"}: ${p.reason}`}}case"hold":{if(e.status!=="airborne")return{ok:!1,message:`${e.callsign} is not airborne`};let o={x:e.x,y:e.y},d=null;if(t.fix){let c=q(i,t.fix);if(!c)return{ok:!1,message:`${e.callsign}: unknown fix ${t.fix}`};o=c,d=c.name}let l=this.cancelApproach(e),h=t.turn??"R",p=Vn(e,o,d,h),f=d?`at ${d}`:"present position";return{ok:!0,message:`${e.callsign} hold ${f}, inbound ${je(p.inbound)}, ${h==="L"?"left":"right"} turns${l?", approach cancelled":""}`}}case"goAround":{if(e.lateralMode==="localizer"&&e.runway){let o=I(i,e.runway);return o&&this.missedApproach(e,o,"instructed by ATC",this.state.tick),{ok:!0,message:`${e.callsign} go around, fly runway heading, climb 3,000 ft`}}return e.lateralMode==="approach"?(this.cancelApproach(e),{ok:!0,message:`${e.callsign} approach clearance cancelled, continue heading ${je(e.heading)}`}):{ok:!1,message:`${e.callsign} is not on approach`}}case"lineUp":case"takeoff":{let o=t.type==="lineUp";if(e.status==="rolling"||e.status==="airborne")return{ok:!1,message:`${e.callsign} is already ${e.status==="rolling"?"rolling":"airborne"}`};if(o&&e.status==="lineup")return{ok:!1,message:`${e.callsign} is already lined up`};let d=t.runway??e.runway??"",l=I(i,d);if(!l){let v=i.runways.map(A=>A.id).join(", ");return{ok:!1,message:`${e.callsign}: unknown runway ${d} (available: ${v})`}}if(e.status==="lineup"&&l.id!==e.runway)return{ok:!1,message:`${e.callsign} is lined up on ${e.runway}, cannot change runway`};let h=At(l,this.state.wind);if(!this.state.runwaysInUse.includes(l.id))return{ok:!1,message:`${e.callsign} unable: runway ${l.id} not in use, tailwind ${Math.round(h)} kt`};let p=t.intersection?.toUpperCase()??(e.status==="lineup"?e.fromIntersection:null);if(e.status==="lineup"&&t.intersection&&p!==e.fromIntersection)return{ok:!1,message:`${e.callsign} is lined up ${e.fromIntersection?`at ${e.fromIntersection}`:"at the threshold"}`};let f=p?l.intersections?.find(v=>v.name===p):void 0;if(p&&!f){let v=(l.intersections??[]).map(A=>A.name).join(", ")||"none";return{ok:!1,message:`${e.callsign}: no intersection ${p} on runway ${l.id} (available: ${v})`}}let c=this.runwayLengthM(l),u=f?f.remainingM:c,m=ft(e);if(m>u)return{ok:!1,message:`${e.callsign} unable: ${f?`${f.name} leaves`:`runway ${l.id} has`} ${ur(u)}, ${e.type} needs ${ur(m)}`};let b=f?` at ${f.name}`:"",y=f?Math.max(0,c-f.remainingM)/1852:0,w=this.runwayBlocker(l,e,o?y:null);if(w)return{ok:!1,message:`${e.callsign} unable${o?" to line up":""}: runway ${l.id} occupied by ${w}`};if(!o){let v=this.wakeWait(e,l,f!==void 0);if(v.sec>0)return{ok:!1,message:`${e.callsign} unable: wake turbulence behind ${v.leader}, ${v.sec} s to wait`}}if(e.status!=="lineup"&&(this.moveToRunway(e,l.id,y),e.fromIntersection=f?.name??null),o)return e.status="lineup",{ok:!0,message:`${e.callsign}${b?` via${b},`:""} line up and wait runway ${l.id}`};e.status="rolling",e.speed=0;let S=this.strips.get(l.id)?.strip??St(l);return this.lastTakeoff.set(S,{tick:this.state.tick,callsign:e.callsign,type:e.type,category:e.category}),{ok:!0,message:`${e.callsign}${b?` from${b},`:""} cleared for takeoff runway ${l.id}`}}}}cancelApproach(t){if(t.lateralMode!=="approach"&&t.lateralMode!=="localizer")return!1;let e=t.lateralMode==="localizer";return t.lateralMode="heading",t.runway=null,t.landingCleared=!1,t.lastCrossTrack=null,t.targetHeading=t.heading,e&&(t.targetAltitude=Math.max(1e3,Math.round(t.altitude/100)*100)),!0}};function Ve(n,t,e){let r=new nt(n),i=0;for(let s=0;s<e;s++){for(;i<t.length&&t[i].tick===s;)r.command(t[i++].command);r.step()}return r.drainEvents(),r}function je(n){return String(Math.round(n)).padStart(3,"0")}function ur(n){return`${Math.round(n).toLocaleString("en-US")} m`}function Ye(n){return`${Math.round(n).toLocaleString("en-US")} ft`}function Ke(n,t){let e=(t.lon-n.lon)*60*Math.cos(n.lat*Math.PI/180),r=(t.lat-n.lat)*60;return{x:fr(e),y:fr(r)}}function qe(n,t,e,r,i){let s=Ke(n,e),a=Ke(n,i),o=Math.round(B(s.x,s.y,a.x,a.y)*10)/10,d=Math.round(B(a.x,a.y,s.x,s.y)*10)/10;return[{id:t,heading:o,thresholdX:s.x,thresholdY:s.y,oppositeId:r},{id:r,heading:d,thresholdX:a.x,thresholdY:a.y,oppositeId:t}]}function Rt(n,t,e,r="fix"){return{name:t,kind:r,...Ke(n,e)}}function fr(n){return Math.round(n*1e3)/1e3}var pt={lat:19.088699,lon:72.867897},[pr,gr]=qe(pt,"09",{lat:19.0884,lon:72.848},"27",{lat:19.0889,lon:72.881104}),[mr,ze]=qe(pt,"14",{lat:19.098499,lon:72.8573},"32",{lat:19.080099,lon:72.877197});ze.ils=!1;gr.intersections=[{name:"N4",remainingM:2600,placeholder:!0},{name:"N6",remainingM:2e3,placeholder:!0}];pr.intersections=[{name:"N9",remainingM:2600,placeholder:!0},{name:"N7",remainingM:2e3,placeholder:!0}];mr.intersections=[{name:"K3",remainingM:2e3,placeholder:!0}];ze.intersections=[{name:"L3",remainingM:2e3,placeholder:!0}];var ge=32,me=21,yr={icao:"VABB",name:"Chhatrapati Shivaji Maharaj Intl",city:"Mumbai",elevation:39,boundary:{halfWidth:ge,halfHeight:me},displayRunwayWidth:.28,runways:[pr,gr,mr,ze],preferredRunways:["27","09","32","14"],fleet:{A20N:30,A21N:14,A320:8,A321:5,B738:10,B739:2,AT76:10,DH8D:2,E75L:2,CRJ9:1,B77W:5,B788:4,B789:3,A333:2,A359:2},airlines:["IGO","IGO","IGO","AIC","AIC","AKJ","SEJ","AXB","UAE","QTR","ETD","SIA","BAW","DLH"],fixes:[Rt(pt,"VASAI",{lat:19.391,lon:72.839}),Rt(pt,"KALYN",{lat:19.243,lon:73.13}),Rt(pt,"PANVL",{lat:18.989,lon:73.117}),Rt(pt,"URAN",{lat:18.877,lon:72.939}),Rt(pt,"COLBA",{lat:18.907,lon:72.815}),{name:"OSKAR",x:-18,y:8,kind:"fix"},{name:"TULIP",x:-16,y:-10,kind:"fix"},{name:"DAHNU",x:4,y:me,kind:"exit"},{name:"NASIK",x:24,y:me,kind:"exit"},{name:"PUNE",x:ge,y:-10,kind:"exit"},{name:"ALIBG",x:2,y:-me,kind:"exit"},{name:"PEKUR",x:-ge,y:-12,kind:"exit"},{name:"LOTAV",x:-ge,y:10,kind:"exit"}]};var br={icao:"XDEM",name:"Demo Field",city:"Practice",elevation:0,boundary:{halfWidth:33,halfHeight:22},displayRunwayWidth:.4,runways:[{id:"27",heading:270,thresholdX:.9,thresholdY:0,oppositeId:"09"},{id:"09",heading:90,thresholdX:-.9,thresholdY:0,oppositeId:"27"}],preferredRunways:["27","09"],airlines:["AAL","ACA","AFR","ANA","BAW","DAL","DLH","EZY","JAL","KLM","QFA","RYR","SIA","SWA","UAE","UAL"],fixes:[{name:"NORTA",x:12,y:12,kind:"fix"},{name:"SURLO",x:12,y:-12,kind:"fix"},{name:"WESKA",x:-12,y:-12,kind:"fix"},{name:"NIBOR",x:-12,y:12,kind:"fix"},{name:"ALPHA",x:0,y:22,kind:"exit"},{name:"BRAVO",x:33,y:0,kind:"exit"},{name:"CHRLY",x:0,y:-22,kind:"exit"},{name:"DELTA",x:-33,y:0,kind:"exit"}]};var lt=[{id:"vabb",label:"Mumbai CSMIA",airport:yr,code:"VABB",blurb:"Two crossing runways, 09/27 and 14/32. Busy mixed traffic.",modes:["approach"]},{id:"xdem",label:"Practice field",airport:br,code:"XGND",blurb:"One runway, 09/27. Quiet airspace to learn the controls.",modes:["approach","ground"]}],xr="vabb";function z(n){return lt.find(t=>t.id===n?.toLowerCase())??lt.find(t=>t.id===xr)??lt[0]}var wr={arrivals:{minIntervalSec:60,maxIntervalSec:120,firstSec:2},departures:{minIntervalSec:90,maxIntervalSec:180,firstSec:20}},$t=[{id:"light",label:"Light",profile:{arrivals:{minIntervalSec:120,maxIntervalSec:200,firstSec:2},departures:{minIntervalSec:150,maxIntervalSec:260,firstSec:30}}},{id:"normal",label:"Normal",profile:wr},{id:"busy",label:"Busy",profile:{arrivals:{minIntervalSec:40,maxIntervalSec:75,firstSec:2},departures:{minIntervalSec:60,maxIntervalSec:110,firstSec:15}}}],ps="normal";function Ct(n){return $t.find(t=>t.id===n?.toLowerCase())??$t.find(t=>t.id===ps)??$t[0]}var gs={variable:!0};function Kt(n,t=xr,e=wr,r=gs,i){let s={seed:n,airport:z(t).airport,traffic:e,weather:r};return i&&(s.options=i),s}var Lt="0.8.0";var Je="atc-sim-session",Sr=1;function Ar(n,t,e){let{seed:r,traffic:i,weather:s,options:a}=n.scenario,o={format:Je,version:Sr,appVersion:Lt,map:t,seed:r,traffic:i,weather:s,tick:n.tick,commands:[...n.getCommandLog()]};return a&&(o.options=a),e&&(o.note=e),o}function ms(n){let t={seed:n.seed,airport:z(n.map).airport,traffic:n.traffic,weather:n.weather};return n.options&&(t.options=n.options),t}function kr(n){return Ve(ms(n),n.commands,n.tick)}function Er(n){let t;try{t=JSON.parse(n)}catch{return{ok:!1,error:"not a JSON file"}}if(!Nt(t)||t.format!==Je)return{ok:!1,error:`not an ATC session file (expected "format": "${Je}")`};if(typeof t.version!="number"||t.version>Sr)return{ok:!1,error:`unsupported session version ${String(t.version)}`};if(typeof t.map!="string"||!lt.some(i=>i.id===t.map))return{ok:!1,error:`unknown map "${String(t.map)}" (have: ${lt.map(i=>i.id).join(", ")})`};if(!Number.isInteger(t.seed))return{ok:!1,error:"seed must be an integer"};if(!ys(t.traffic))return{ok:!1,error:"traffic must have arrivals and departures intervals"};if(!Nt(t.weather)||typeof t.weather.variable!="boolean")return{ok:!1,error:'weather must have "variable": true or false'};let e=t.tick??0;if(!Number.isInteger(e)||e<0)return{ok:!1,error:"tick must be a whole number"};let r=t.commands??[];return!Array.isArray(r)||!r.every(bs)?{ok:!1,error:"commands must be a list of { tick, command }"}:{ok:!0,file:{...t,tick:e,commands:r}}}function Nt(n){return typeof n=="object"&&n!==null&&!Array.isArray(n)}function vr(n){return Nt(n)&&typeof n.minIntervalSec=="number"&&typeof n.maxIntervalSec=="number"&&typeof n.firstSec=="number"}function ys(n){return Nt(n)&&vr(n.arrivals)&&vr(n.departures)}function bs(n){return Nt(n)&&Number.isInteger(n.tick)&&Nt(n.command)&&typeof n.command.type=="string"&&typeof n.command.callsign=="string"}var Tr=/^[A-Z]{2,3}\d{1,4}[A-Z]?$/,ye=/^\d{2}[LRC]?$/,Ze=/^[A-Z]{3,5}$/,xs=/^[A-Z]{1,2}\d{1,2}[A-Z]?$/;function Mr(n){return Tr.test(n.toUpperCase())}function Qe(n){let t=n.trim().toUpperCase().split(/\s+/).filter(s=>s.length>0);if(t.length===0)return{ok:!1,error:"empty command"};let e=t[0];if(!Tr.test(e))return{ok:!1,error:`"${t[0]}" is not a callsign (select an aircraft or type e.g. AAL123)`};if(t.length===1)return{ok:!1,error:`no instruction for ${e}`};let r=[],i=1;for(;i<t.length;){let s=t[i++],a=t[i];if(s==="C"){if(a===void 0)return{ok:!1,error:"C needs a heading (3 digits) or altitude (1-2 digits)"};if(i++,/^\d{3}$/.test(a)){let o=Number(a);if(o>360)return{ok:!1,error:`heading ${a} must be 000 to 360`};let d=t[i],l;(d==="R"||d==="L"&&!(t[i+1]!==void 0&&ye.test(t[i+1])))&&(l=d,i++),r.push(l?{type:"heading",callsign:e,heading:o,turn:l}:{type:"heading",callsign:e,heading:o})}else if(/^\d{1,2}$/.test(a)){let o=Number(a)*1e3,d=!1;(t[i]==="X"||t[i]==="EX")&&(d=!0,i++),r.push(d?{type:"altitude",callsign:e,altitude:o,expedite:d}:{type:"altitude",callsign:e,altitude:o})}else if(Ze.test(a)){let o=[a];for(;t[i]!==void 0&&Ze.test(t[i]);)o.push(t[i++]);r.push({type:"direct",callsign:e,fixes:o})}else return{ok:!1,error:`cannot read "C ${a}": use 3 digits for heading, 1-2 for thousands of feet, or a fix name`}}else if(s==="S"){if(a===void 0||!/^\d{2,3}$/.test(a))return{ok:!1,error:"S needs a speed in knots, e.g. S 210"};i++,r.push({type:"speed",callsign:e,speed:Number(a)})}else if(s==="L"||s==="I"){if(a===void 0||!ye.test(a))return{ok:!1,error:`${s} needs a runway, e.g. ${s} 27`};i++,r.push({type:s==="L"?"land":"intercept",callsign:e,runway:a})}else if(s==="H"){let o;a!==void 0&&Ze.test(a)&&(o=a,i++);let d,l=t[i];(l==="R"||l==="L"&&!(t[i+1]!==void 0&&ye.test(t[i+1])))&&(d=l,i++);let h={type:"hold",callsign:e};o&&(h.fix=o),d&&(h.turn=d),r.push(h)}else if(s==="A"||s==="GA")r.push({type:"goAround",callsign:e});else if(s==="T"||s==="W"||s==="LUAW"){let o,d;a!==void 0&&ye.test(a)&&(o=a,i++,t[i]!==void 0&&xs.test(t[i])&&(d=t[i++]));let l=s==="T"?"takeoff":"lineUp",h=o?{type:l,callsign:e,runway:o}:{type:l,callsign:e};d&&(h.intersection=d),r.push(h)}else return{ok:!1,error:`unknown instruction "${s}" (use C, S, I, L, W, T, H or A)`}}return{ok:!0,callsign:e,commands:r}}var k={outside:"#0F191F",scope:"#17242C",boundary:"#3A5262",grid:"#1D2D37",runway:"#C9D4DA",runwayIdle:"#6F8A99",centreline:"#4A6B7D",fix:"#7F98A6",exit:"#9DB3C0",blip:"#E6EEF0",dataBlock:"#A8E6C1",departure:"#F2C46D",cleared:"#7FD3FF",selected:"#FFC857",conflict:"#FF5A4E",warning:"#FF9F1C",trail:"#6F8A99",scale:"#7F98A6"},qt='"JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace',Rr=14,tn=15,It={labelPx:11,leaderSec:60,rangeRings:!1,fixNames:!0,conflictAlerts:!0},ws=14,gt=class{constructor(t,e,r=It){g(this,"canvas");g(this,"ctx");g(this,"staticLayer");g(this,"airport");g(this,"inUse",[]);g(this,"w",0);g(this,"h",0);g(this,"dpr",1);g(this,"scale",1);g(this,"cx",0);g(this,"cy",0);g(this,"hitTargets",[]);g(this,"display",It);this.display=r,this.canvas=t;let i=t.getContext("2d");if(!i)throw new Error("Canvas 2D not available");this.ctx=i,this.staticLayer=document.createElement("canvas"),this.airport=e,this.resize()}resize(){let t=this.canvas.getBoundingClientRect();this.dpr=window.devicePixelRatio||1,this.w=Math.max(1,t.width),this.h=Math.max(1,t.height);for(let i of[this.canvas,this.staticLayer])i.width=Math.round(this.w*this.dpr),i.height=Math.round(this.h*this.dpr);let{halfWidth:e,halfHeight:r}=this.airport.boundary;this.scale=Math.min((this.w-2*Rr)/(2*e),(this.h-2*Rr)/(2*r)),this.cx=this.w/2,this.cy=this.h/2,this.drawStatic()}setDisplay(t){this.display=t,this.drawStatic()}setRunwaysInUse(t){t.join()!==this.inUse.join()&&(this.inUse=[...t],this.drawStatic())}pick(t,e){let r=this.canvas.getBoundingClientRect(),i=t-r.left,s=e-r.top,a=null,o=ws;for(let d of this.hitTargets){let l=Math.hypot(d.sx-i,d.sy-s);l<o&&(o=l,a=d.id)}if(a!==null)return a;for(let d=this.hitTargets.length-1;d>=0;d--){let l=this.hitTargets[d];if(i>=l.bx-3&&i<=l.bx+l.bw+3&&s>=l.by-3&&s<=l.by+l.bh+3)return l.id}return null}isOverAircraft(t,e){return this.pick(t,e)!==null}render(t,e,r,i,s){let a=this.ctx;a.setTransform(1,0,0,1,0,0),a.drawImage(this.staticLayer,0,0),a.setTransform(this.dpr,0,0,this.dpr,0,0),this.hitTargets=[];let o=t.aircraft.find(d=>d.id===i);o&&this.drawSelectionAids(o);for(let d of t.aircraft)d.id!==i&&this.drawOne(d,e,r,!1,s);o&&this.drawOne(o,e,r,!0,s)}drawOne(t,e,r,i,s){if(t.status==="waiting")return;let a=e.get(t.id),o=a?a.x+(t.x-a.x)*r:t.x,d=a?a.y+(t.y-a.y)*r:t.y;this.drawAircraft(t,o,d,i,s.get(t.id))}sx(t){return this.cx+t*this.scale}sy(t){return this.cy-t*this.scale}drawStatic(){let t=this.staticLayer.getContext("2d");if(!t)return;let{halfWidth:e,halfHeight:r}=this.airport.boundary;t.setTransform(this.dpr,0,0,this.dpr,0,0),t.fillStyle=k.outside,t.fillRect(0,0,this.w,this.h);let i=this.sx(-e),s=this.sy(r),a=2*e*this.scale,o=2*r*this.scale;t.fillStyle=k.scope,t.fillRect(i,s,a,o),t.strokeStyle=k.grid,t.lineWidth=1,t.beginPath();for(let c=-Math.floor(e/10)*10;c<=e;c+=10)t.moveTo(Math.round(this.sx(c))+.5,s),t.lineTo(Math.round(this.sx(c))+.5,s+o);for(let c=-Math.floor(r/10)*10;c<=r;c+=10)t.moveTo(i,Math.round(this.sy(c))+.5),t.lineTo(i+a,Math.round(this.sy(c))+.5);if(t.stroke(),t.strokeStyle=k.boundary,t.strokeRect(Math.round(i)+.5,Math.round(s)+.5,Math.round(a),Math.round(o)),this.display.rangeRings){t.save(),t.beginPath(),t.rect(i,s,a,o),t.clip(),t.strokeStyle=k.boundary,t.setLineDash([2,5]);for(let c=10;c<=Math.hypot(e,r);c+=10)t.beginPath(),t.arc(this.sx(0),this.sy(0),c*this.scale,0,Math.PI*2),t.stroke();t.restore()}for(let c of this.airport.runways){if(!this.inUse.includes(c.id)||c.ils===!1)continue;let{dx:u,dy:m}=at(c.heading),b=-u,y=-m;t.strokeStyle=k.centreline,t.setLineDash([6,6]),t.beginPath(),t.moveTo(this.sx(c.thresholdX),this.sy(c.thresholdY)),t.lineTo(this.sx(c.thresholdX+b*tn),this.sy(c.thresholdY+y*tn)),t.stroke(),t.setLineDash([]),t.beginPath();for(let w=1;w<=tn;w++){let S=c.thresholdX+b*w,v=c.thresholdY+y*w,A=w%5===0?.6:.25;t.moveTo(this.sx(S-y*A),this.sy(v+b*A)),t.lineTo(this.sx(S+y*A),this.sy(v-b*A))}t.stroke()}let d=new Set,l=this.airport.displayRunwayWidth/2;for(let c of this.airport.runways){if(d.has(c.id))continue;let u=I(this.airport,c.oppositeId);if(!u)continue;d.add(c.id).add(u.id);let m=this.inUse.includes(c.id)||this.inUse.includes(u.id),{dx:b,dy:y}=at(c.heading),w=y,S=-b;t.fillStyle=m?k.runway:k.runwayIdle,t.beginPath(),t.moveTo(this.sx(c.thresholdX+w*l),this.sy(c.thresholdY+S*l)),t.lineTo(this.sx(u.thresholdX+w*l),this.sy(u.thresholdY+S*l)),t.lineTo(this.sx(u.thresholdX-w*l),this.sy(u.thresholdY-S*l)),t.lineTo(this.sx(c.thresholdX-w*l),this.sy(c.thresholdY-S*l)),t.closePath(),t.fill()}t.font=`600 11px ${qt}`,t.textAlign="center",t.textBaseline="middle";for(let c of this.airport.runways){let{dx:u,dy:m}=at(c.heading),b=14/this.scale+.15;t.fillStyle=this.inUse.includes(c.id)?k.runway:k.runwayIdle,t.fillText(c.id,this.sx(c.thresholdX-u*b),this.sy(c.thresholdY-m*b))}t.font=`10px ${qt}`,t.textBaseline="middle";for(let c of this.airport.fixes)this.drawFix(t,c,c.kind==="exit"?k.exit:k.fix);let h=5,p=i+12,f=s+o-14;t.strokeStyle=k.scale,t.beginPath(),t.moveTo(p,f-4),t.lineTo(p,f),t.lineTo(p+h*this.scale,f),t.lineTo(p+h*this.scale,f-4),t.stroke(),t.fillStyle=k.scale,t.textAlign="left",t.textBaseline="alphabetic",t.fillText(`${h} nm`,p+h*this.scale+6,f+1),t.font=`600 11px ${qt}`,t.fillText(`${this.airport.icao}  ${this.airport.city.toUpperCase()}`,i+12,s+18)}drawFix(t,e,r){let i=this.sx(e.x),s=this.sy(e.y);if(t.strokeStyle=r,t.fillStyle=r,t.lineWidth=1,t.beginPath(),e.kind==="exit"?(t.moveTo(i,s-5),t.lineTo(i+5,s+4),t.lineTo(i-5,s+4),t.closePath(),t.stroke()):(t.moveTo(i,s-5),t.lineTo(i+1.5,s-1.5),t.lineTo(i+5,s),t.lineTo(i+1.5,s+1.5),t.lineTo(i,s+5),t.lineTo(i-1.5,s+1.5),t.lineTo(i-5,s),t.lineTo(i-1.5,s-1.5),t.closePath(),t.stroke()),!this.display.fixNames&&e.kind!=="exit")return;let{halfWidth:a,halfHeight:o}=this.airport.boundary,d=t.measureText(e.name).width,l=i+13,h=s;t.textAlign="left",e.x>=a-.01&&(l=i-13-d),e.y>=o-.01&&(l=i-d/2,h=s+16),e.y<=-o+.01&&(l=i-d/2,h=s-15),t.fillText(e.name,l,h)}drawSelectionAids(t){let e=this.ctx;if(e.save(),e.strokeStyle=k.selected,e.fillStyle=k.selected,e.font=`10px ${qt}`,e.textBaseline="middle",t.lateralMode==="direct"&&t.route.length>0&&t.status==="airborne"){e.setLineDash([4,5]),e.globalAlpha=.7,e.beginPath(),e.moveTo(this.sx(t.x),this.sy(t.y));for(let i of t.route){let s=q(this.airport,i);s&&e.lineTo(this.sx(s.x),this.sy(s.y))}e.stroke(),e.setLineDash([]),e.globalAlpha=1}t.lateralMode==="hold"&&t.hold&&this.drawHold(t);let r=t.exitFix?q(this.airport,t.exitFix):void 0;r&&(e.lineWidth=2,e.beginPath(),e.arc(this.sx(r.x),this.sy(r.y),11,0,Math.PI*2),e.stroke(),e.lineWidth=1,this.drawFix(e,r,k.selected)),e.restore()}drawHold(t){let e=t.hold;if(!e)return;let r=this.ctx,{dx:i,dy:s}=at(e.inbound),a=e.turn==="R"?1:-1,o=s*a,d=-i*a,l=Math.max(t.speed,150)/3600/(3*Math.PI/180),h=Math.max(t.speed,150)/3600*ae,p=[],f=(y,w,S,v)=>{let A=Math.atan2(v-w,S-y);for(let H=0;H<=12;H++){let G=A-a*(Math.PI*H)/12;p.push({x:y+Math.cos(G)*l,y:w+Math.sin(G)*l})}},c=e.x,u=e.y;f(c+o*l,u+d*l,c,u);let m=c+o*2*l-i*h,b=u+d*2*l-s*h;f(c-i*h+o*l,u-s*h+d*l,m,b),r.save(),r.strokeStyle=k.selected,r.globalAlpha=.6,r.setLineDash([4,4]),r.beginPath(),p.forEach((y,w)=>w===0?r.moveTo(this.sx(y.x),this.sy(y.y)):r.lineTo(this.sx(y.x),this.sy(y.y))),r.closePath(),r.stroke(),r.restore()}drawAircraft(t,e,r,i,s){let a=this.ctx,o=this.sx(e),d=this.sy(r),h=t.lateralMode==="approach"||t.lateralMode==="localizer"?k.cleared:t.isArrival?k.dataBlock:k.departure,p=t.conflictWarning&&this.display.conflictAlerts,f=t.inConflict?k.conflict:p?k.warning:i?k.selected:h;if(s&&(a.fillStyle=k.trail,s.points.forEach((S,v)=>{a.globalAlpha=.25+.6*(v+1)/s.points.length,a.fillRect(this.sx(S.x)-1,this.sy(S.y)-1,2,2)}),a.globalAlpha=1),this.display.leaderSec>0&&(t.status==="airborne"||t.status==="rolling"||t.status==="rollout")){let{dx:S,dy:v}=at(t.heading),A=Math.max(t.speed,60)/3600*this.display.leaderSec;a.strokeStyle=f,a.lineWidth=1,a.beginPath(),a.moveTo(o,d),a.lineTo(this.sx(e+S*A),this.sy(r+v*A)),a.stroke()}t.inConflict&&(a.strokeStyle=k.conflict,a.setLineDash([3,4]),a.beginPath(),a.arc(o,d,3/2*this.scale,0,Math.PI*2),a.stroke(),a.setLineDash([])),a.fillStyle=i||t.inConflict||p?f:k.blip,a.fillRect(o-3,d-3,6,6),i&&(a.strokeStyle=k.selected,a.lineWidth=1.5,a.strokeRect(o-7,d-7,14,14),a.lineWidth=1);let c=[t.callsign,vs(t)];i&&c.push(`${t.type} ${Ss(t)}`);let u=this.display.labelPx,m=Math.round(u*1.2);a.font=`${u}px ${qt}`,a.textAlign="left",a.textBaseline="alphabetic";let b=o+10,y=d-12,w=0;for(let S of c)w=Math.max(w,a.measureText(S).width);i&&(a.fillStyle="rgba(15, 25, 31, 0.78)",a.fillRect(b-3,y-u,w+6,c.length*m+3)),a.fillStyle=f,c.forEach((S,v)=>a.fillText(S,b,y+v*m)),this.hitTargets.push({id:t.id,sx:o,sy:d,bx:b,by:y-u+1,bw:w,bh:c.length*m})}};function vs(n){let t=en(Math.round(n.altitude/100)),e=n.targetAltitude-n.altitude,r=String(Math.round(n.speed/10)).padStart(2,"0");return n.status==="lineup"?`${t} LUAW`:n.status==="rollout"?`${t} ${String(Math.round(n.speed/10)).padStart(2,"0")}`:Math.abs(e)<50?`${t} ${r}`:`${t}${e>0?"\u2191":"\u2193"}${en(Math.round(n.targetAltitude/100))} ${r}`}function Ss(n){return n.lateralMode==="localizer"?n.landingCleared?`FINAL ${n.runway}`:`ILS ${n.runway}`:n.lateralMode==="approach"?n.landingCleared?`CLR ${n.runway}`:`INT ${n.runway}`:n.lateralMode==="direct"&&n.route.length>0?`\u2192${n.route[0]}`:n.lateralMode==="hold"&&n.hold?`HOLD ${n.hold.fix??""}`.trim():n.status==="rolling"?`ROLL ${n.runway}`:n.status==="rollout"?`SLOWING ${n.runway}`:`H${en(n.targetHeading)}`}function en(n){return String(Math.round(n)).padStart(3,"0")}var $r=["cs","type","state","alt","nav","spd","exit"],xe=class{constructor(t,e,r,i,s){g(this,"arrivalsEl",t);g(this,"departuresEl",e);g(this,"arrCount",r);g(this,"depCount",i);g(this,"items",new Map);for(let a of[t,e])a.addEventListener("pointerdown",o=>{let d=o.target.closest("li[data-id]");d&&(o.preventDefault(),s(Number(d.dataset.id)))});this.clear()}clear(){this.items.clear(),this.arrivalsEl.replaceChildren(be("No arrivals yet. They enter from any edge.")),this.departuresEl.replaceChildren(be("No departures waiting.")),this.arrCount.textContent="",this.depCount.textContent=""}update(t,e){let r=new Set,i=0,s=0;for(let a of t.aircraft){r.add(a.id),a.isArrival?i++:s++;let o=this.items.get(a.id);if(!o){o=this.create(a),this.items.set(a.id,o);let d=a.isArrival?this.arrivalsEl:this.departuresEl;d.querySelector(".empty")?.remove(),d.prepend(o.li)}this.fill(o,a,e,t.runwaysInUse)}for(let[a,o]of this.items)r.has(a)||(o.li.remove(),this.items.delete(a));i===0&&!this.arrivalsEl.querySelector(".empty")&&this.arrivalsEl.append(be("No arrivals right now.")),s===0&&!this.departuresEl.querySelector(".empty")&&this.departuresEl.append(be("No departures waiting.")),Cr(this.arrCount,i?String(i):""),Cr(this.depCount,s?String(s):"")}create(t){let e=document.createElement("li");e.dataset.id=String(t.id),e.title=`Select ${t.callsign}`;let r={},i={};for(let s of $r){if(s==="exit"&&t.isArrival)continue;let a=document.createElement("span");a.className=`s-${s}`,e.append(a),r[s]=a,i[s]=""}return{li:e,fields:r,last:i,cls:""}}fill(t,e,r,i){let s={cs:e.callsign,type:`${e.type} ${e.category[0].toUpperCase()}`,state:As(e,i),alt:ks(e),nav:Es(e),spd:e.status==="waiting"||e.status==="lineup"?"":String(Math.round(e.speed))};e.isArrival||(s.exit=`Exit ${e.exitFix} at or above ${e.exitAltitude.toLocaleString("en-US")} ft`);for(let o of $r){let d=t.fields[o],l=s[o];!d||l===void 0||t.last[o]===l||(d.textContent=l,t.last[o]=l)}let a=["strip",e.isArrival?"arr":"dep",e.id===r?"sel":"",e.inConflict?"conf":e.conflictWarning?"warn":"",e.status==="waiting"?"ground":""].filter(Boolean).join(" ");a!==t.cls&&(t.li.className=a,t.cls=a,e.id===r&&t.li.scrollIntoView({block:"nearest"}))}};function As(n,t){switch(n.status){case"waiting":return n.runway&&!t.includes(n.runway)?`${n.runway} closed`:`Holding short ${n.runway}`;case"lineup":return`Lined up ${n.runway}`;case"rolling":return`Rolling ${n.runway}`;case"rollout":return`Landed, slowing ${n.runway}`;default:return n.lateralMode==="localizer"?n.landingCleared?`Final ${n.runway}, cleared`:`Final ${n.runway}, land?`:n.lateralMode==="approach"?n.landingCleared?`Cleared to land ${n.runway}`:`Intercept ${n.runway}`:n.isArrival?"Inbound":"Climbing out"}}function ks(n){let t=nn(n.altitude/100),e=nn(n.targetAltitude/100);return n.status==="waiting"||n.status==="lineup"?`\u2192 ${e}`:Math.abs(n.targetAltitude-n.altitude)<50?t:`${t} ${n.targetAltitude>n.altitude?"\u2191":"\u2193"} ${e}`}function Es(n){return n.lateralMode==="direct"&&n.route.length>0?`\u2192 ${n.route.join(" ")}`:n.lateralMode==="hold"&&n.hold?`Hold ${n.hold.fix??"here"}`:n.lateralMode==="approach"||n.lateralMode==="localizer"?`LOC ${n.runway}`:`H${nn(n.targetHeading)}`}function nn(n){return String(Math.round(n)).padStart(3,"0")}function Cr(n,t){n.textContent!==t&&(n.textContent=t)}function be(n){let t=document.createElement("li");return t.className="empty",t.textContent=n,t}var we=class{constructor(t){g(this,"nodes",new Map);g(this,"adj",new Map);g(this,"standIds");for(let e of t.nodes)this.nodes.set(e.id,e),this.adj.set(e.id,[]);this.standIds=new Set(t.stands.map(e=>e.id));for(let e of t.edges){let r=this.nodes.get(e.a),i=this.nodes.get(e.b);if(!r||!i)throw new Error(`edge ${e.a}-${e.b} references a missing node`);let s=Math.hypot(i.x-r.x,i.y-r.y);this.adj.get(r.id).push({to:i.id,edge:e,len:s,bearing:j(r,i)}),this.adj.get(i.id).push({to:r.id,edge:e,len:s,bearing:j(i,r)})}}node(t){let e=this.nodes.get(t);if(!e)throw new Error(`unknown node ${t}`);return e}has(t){return this.nodes.has(t)}neighbors(t){return this.adj.get(t)??[]}link(t,e){return this.neighbors(t).find(r=>r.to===e)}isStand(t){return this.standIds.has(t)}isDeadEnd(t){if(this.isStand(t))return!1;let e=0;for(let r of this.neighbors(t))r.edge.kind==="runway"||this.node(r.to).onRunway||this.isStand(r.to)||e++;return e<=1}pathLength(t){let e=0;for(let r=1;r<t.length;r++)e+=this.link(t[r-1],t[r])?.len??0;return e}canMove(t,e,r,i,s){let a=this.link(e,r);if(!a||a.edge.kind==="runway")return!1;let o=this.node(e),d=this.node(r);if(this.isStand(r)&&r!==s||d.onRunway&&!o.holdShort)return!1;if(o.onRunway)return!t||!d.holdShort||r===t?!1:J(j(this.node(t),o),a.bearing)<=30;if(t){if(J(j(this.node(t),o),a.bearing)>120)return r===t&&this.isDeadEnd(e)}else if(i!==null&&J(i,a.bearing)>100&&!this.isDeadEnd(e))return!1;return!0}checkRoute(t,e,r){if(t.length<2)return"route too short";for(let a of t)if(!this.has(a))return`unknown point ${a}`;let i=t[t.length-1];if(this.node(i).onRunway)return"a route cannot end on the runway";let s=e;for(let a=1;a<t.length;a++){let o=t[a-1],d=t[a];if(!this.link(o,d))return`${o} and ${d} are not connected`;if(!this.canMove(s,o,d,a===1?r:null,i))return this.link(o,d).edge.kind==="runway"?"taxiing along the runway is not allowed":this.isStand(d)&&d!==i?`cannot pass through stand ${d}`:`cannot turn that sharply at ${o}`;s=o}return null}route(t,e,r,i,s=[]){if(!this.has(t)||!this.has(i))return null;let a=s.map(u=>u.toUpperCase()),o=u=>`${u.node}|${u.prev??""}|${u.k}`,d=new Map,l=new Map,h={node:t,prev:e,k:0};d.set(o(h),0),l.set(o(h),null);let p=[{st:h,d:0}],f=null;for(;p.length>0;){let u=0;for(let y=1;y<p.length;y++)p[y].d<p[u].d&&(u=y);let{st:m,d:b}=p.splice(u,1)[0];if(!(b>(d.get(o(m))??1/0))){if(m.node===i&&m.k===a.length&&m.node!==t){f=m;break}for(let y of this.neighbors(m.node)){if(!this.canMove(m.prev,m.node,y.to,m.prev===e&&m.node===t?r:null,i))continue;let w=m.k,S=y.edge.name.toUpperCase();if(a.length>0){let Xt=y.edge.kind==="connector"||y.edge.kind==="link"||y.edge.kind==="taxilane"||y.edge.kind==="stand";if(w<a.length&&S===a[w])w++;else if(!(w>0&&S===a[w-1])){if(!Xt)continue}}let v=y.len;m.prev&&J(j(this.node(m.prev),this.node(m.node)),y.bearing)>45&&(v+=15),this.node(y.to).onRunway&&(v+=400);let A={node:y.to,prev:m.node,k:w},H=o(A),G=b+v;G<(d.get(H)??1/0)&&(d.set(H,G),l.set(H,m),p.push({st:A,d:G}))}}}if(!f)return null;let c=[];for(let u=f;u;u=l.get(o(u))??null)c.push(u.node);return c.reverse()}routeThrough(t,e,r,i){let s=[t],a=e,o=r;for(let d of i){let l=s[s.length-1];if(d===l)continue;let h=this.route(l,a,o,d);if(!h)return null;s=s.concat(h.slice(1)),a=s[s.length-2],o=null}return s.length>1?s:null}};function j(n,t){return(Math.atan2(t.x-n.x,t.y-n.y)*180/Math.PI%360+360)%360}function J(n,t){return Math.abs(((t-n)%360+540)%360-180)}var R=.5,O=1852/3600,Lr=20,Ts=10,Ms=12,Rs=5,$s=15,Nr=3,Cs=8,ve=15,Ls=30,Ir=600,Ns=1,Or=2,Dr=70,Is=40,_r=25,Se=400,Ds=30,_s=8,Ps=20,Hs=10,rn=300,sn=8*1852,Fs=6*1852,Pr=90,Hr=60,Os=60,Gs=60,Ws=30,Us=45,Bs=45,Xs=12*1852,js=5,Ys=.25,Ae={departed:10,parked:10,conflict:-20,goAround:-5},Vs=2654435769,Dt=class{constructor(t){g(this,"scenario");g(this,"airport");g(this,"graph");g(this,"dt",R);g(this,"state");g(this,"rng");g(this,"weatherRng");g(this,"events",[]);g(this,"log",[]);g(this,"nextId",1);g(this,"nextDeparture");g(this,"nextArrival");g(this,"lastTakeoffTick",-1e6);g(this,"lastTakeoffCategory","light");g(this,"conflictPairs",new Set);g(this,"usedCallsigns",new Set);this.scenario=t,this.airport=t.airport,this.graph=new we(t.airport),this.rng=Tt(t.seed),this.weatherRng=Tt((t.seed^Vs)>>>0);let e=fe({variable:t.windVariable,initialWind:t.initialWind},this.weatherRng);this.state={tick:0,time:0,wind:e,runway:this.bestRunway(e,null),aircraft:[],stats:{score:0,departed:0,parked:0,conflicts:0,goArounds:0,taxiOutSec:0,taxiInSec:0,commandsIssued:0}},this.nextDeparture=Math.round(t.traffic.departures.firstSec/R),this.nextArrival=Math.round(t.traffic.arrivals.firstSec/R)}get tick(){return this.state.tick}getState(){return this.state}drainEvents(){let t=this.events;return this.events=[],t}getCommandLog(){return this.log}runwayEnd(t=this.state.runway){return this.airport.runways.find(e=>e.id===t)??this.airport.runways[0]}step(){let t=this.state,e=t.tick;if(this.scenario.windVariable&&e>0&&e%Math.round(he/R)===0){pe(t.wind,this.weatherRng);let r=this.bestRunway(t.wind,t.runway);if(r!==t.runway){t.runway=r,this.events.push({type:"runwayChanged",tick:e,runway:r});for(let i of t.aircraft){if(i.status!=="handoff")continue;let s=i.node?this.departurePoint(i,i.node):null;if(s?.ok){i.lineupNode=s.runwayNode;continue}i.status="taxi",this.events.push({type:"wrongHoldingPoint",tick:e,callsign:i.callsign,at:$(i.node??""),runway:r,reason:s?.why??"not a departure point"})}}}this.tower(e);for(let r of t.aircraft)switch(r.status){case"parked":this.parked(r,e);break;case"pushback":this.pushback(r);break;case"starting":--r.timer<=0&&(r.status="taxi",this.events.push({type:"readyToTaxi",tick:e,callsign:r.callsign}));break;case"taxi":case"lineup":this.taxi(r,e);break;case"takeoff":this.takeoffRoll(r,e);break;case"final":this.final(r,e);break;case"landing":this.rollout(r);break;default:break}t.aircraft=t.aircraft.filter(r=>r.status!=="gone"),this.checkConflicts(e),this.spawn(e),t.tick=e+1,t.time=t.tick*R}run(t){for(let e=0;e<t;e++)this.step()}command(t){let e=this.apply(t),r=this.state.tick;return e.ok?(this.log.push({tick:r,command:t}),this.state.stats.commandsIssued++,this.events.push({type:"commandAccepted",tick:r,callsign:t.callsign,message:e.message})):this.events.push({type:"commandRejected",tick:r,callsign:t.callsign,message:e.message}),e}addAircraft(t){let e=this.airport.stands.find(s=>s.id===t.stand),r=this.newAircraft(t.isArrival,e?.cargo??!1,t.stand,this.state.tick);if(r.callsign=t.callsign.toUpperCase(),t.type){let s=P.find(a=>a.type===t.type);s&&(r.type=s.type,r.category=s.category)}let i=t.status??(t.isArrival?"final":"ready");if(r.status=i,i==="final")r.runwayDist=t.finalDist??5e3,r.runway=this.state.runway,this.placeOnRunway(r,this.runwayEnd(),-r.runwayDist),r.speed=L(r).approachSpeed;else{r.node=t.node??t.stand;let s=this.graph.node(r.node);r.x=s.x,r.y=s.y,r.heading=t.heading??e?.heading??0}return this.state.aircraft.push(r),r}planRoute(t,e){let r=this.find(t);if(!r)return null;let i=this.routeStart(r);return i?this.graph.routeThrough(i.start,i.prev,i.heading,e):null}routeStart(t){if(t.status==="starting"||t.status==="taxi"&&!t.vacating){if(t.next)return{start:t.next,prev:t.node,heading:null};if(t.node)return{start:t.node,prev:null,heading:t.heading}}return null}apply(t){let e=this.find(t.callsign);if(!e)return{ok:!1,message:`${t.callsign}: no such aircraft`};let r=e.callsign;switch(t.type){case"pushback":{if(e.status!=="ready")return{ok:!1,message:e.status==="parked"?`${r} has not requested pushback`:`${r} is not at the stand`};let i=this.airport.stands.find(o=>o.id===e.stand);if(!i)return{ok:!1,message:`${r}: no stand`};let s={N:0,E:90,S:180,W:270}[t.face];return this.graph.neighbors(i.pushNode).filter(o=>o.edge.kind==="taxilane"||o.edge.kind==="link").some(o=>J(o.bearing,s)<30)?(e.status="pushback",e.node=i.id,e.next=i.pushNode,e.progress=0,e.timer=s,e.speed=0,{ok:!0,message:`${r} push back from ${i.id}, face ${{N:"north",E:"east",S:"south",W:"west"}[t.face]}`}):{ok:!1,message:`${r} cannot face ${t.face} after pushback from ${i.id}`}}case"taxi":{let i=this.routeStart(e);if(!i)return e.status==="ready"||e.status==="parked"?{ok:!1,message:`${r} needs pushback first`}:e.vacating?{ok:!1,message:`${r} is still vacating the runway`}:{ok:!1,message:`${r} is not taxiing`};let s;if(t.route&&t.route.length>0){s=[...t.route],s[0]!==i.start&&s.unshift(i.start);let l=this.graph.checkRoute(s,i.prev,i.heading);if(l)return{ok:!1,message:`${r} unable: ${l}`}}else if(t.to){let l=this.resolvePlace(t.to);if(!l)return{ok:!1,message:`${r}: unknown destination ${t.to}`};if(s=this.graph.route(i.start,i.prev,i.heading,l,t.via??[]),!s)return{ok:!1,message:`${r}: no route to ${t.to}${t.via?.length?` via ${t.via.join(" ")}`:""}`}}else return{ok:!1,message:`${r}: taxi where?`};let a=s[s.length-1];if(this.graph.isStand(a)&&(!e.isArrival||a!==e.stand))return{ok:!1,message:e.isArrival?`${r} is assigned stand ${e.stand}`:`${r} is departing, not parking`};e.route=s.slice(1),e.held=!1,e.crossingCleared=!1,e.crossingRequested=!1,e.status==="taxi"&&this.advance(e);let o=this.crossingAhead(e),d=this.routeNames(s);return{ok:!0,message:`${r} taxi to ${$(a)} via ${d.join(" ")||"present position"}${o?`, hold short of runway at ${$(o)}`:""}`}}case"hold":return e.status!=="taxi"||this.onRunwayArea(e)?{ok:!1,message:`${r} cannot hold here`}:(e.held=!0,{ok:!0,message:`${r} hold position`});case"continue":return e.held?(e.held=!1,{ok:!0,message:`${r} continue taxi`}):{ok:!1,message:`${r} is not holding`};case"cross":{let i=this.crossingAhead(e);return e.status!=="taxi"||!i?{ok:!1,message:`${r} has no runway crossing ahead`}:(e.crossingRequested=!0,{ok:!0,message:`${r} requesting to cross runway at ${$(i)}`})}}}resolvePlace(t){let e=t.toUpperCase();return this.graph.has(`${e}h`)?`${e}h`:this.graph.has(e)?e:null}find(t){let e=t.toUpperCase();return this.state.aircraft.find(r=>r.callsign===e)}parked(t,e){if(!(--t.timer>0)){if(t.isArrival){t.status="gone";return}t.status="ready",t.phaseTick=e,this.events.push({type:"pushbackRequested",tick:e,callsign:t.callsign,stand:t.stand})}}pushback(t){let e=this.graph.node(t.node),r=this.graph.node(t.next),i=Math.hypot(r.x-e.x,r.y-e.y);t.speed=Nr,t.progress+=Nr*O*R;let s=Math.min(1,t.progress/i);t.x=e.x+(r.x-e.x)*s,t.y=e.y+(r.y-e.y)*s,!(s<1)&&(t.heading=t.timer,t.node=t.next,t.next=null,t.progress=0,t.speed=0,t.status="starting",t.timer=Math.round(Ds/R))}taxi(t,e){t.next||this.advance(t);let r=this.targetSpeed(t);if(t.speed<r?t.speed=Math.min(r,t.speed+Ns*R):t.speed=Math.max(r,t.speed-Or*R),!t.next){t.speed=0;return}let i=t.speed*O*R;for(;i>0&&t.next;){let s=this.graph.node(t.node),a=this.graph.node(t.next),d=Math.hypot(a.x-s.x,a.y-s.y)-t.progress;i<d?(t.progress+=i,i=0):(i-=d,this.arrive(t,e),t.next||(i=0))}this.place(t)}arrive(t,e){let r=t.node;t.node=t.next,t.progress=0;let i=this.graph.node(t.node);if(i.holdShort&&r&&this.graph.node(r).onRunway&&(t.crossingCleared=!1,t.crossingRequested=!1),t.status==="lineup"&&i.onRunway){let s=this.runwayEnd(t.runway??this.state.runway);t.next=null,t.heading=s.heading,t.speed=0,t.status="takeoff",t.runwayDist=this.alongRunway(s,i),t.timer=Math.round(_s/R),this.events.push({type:"linedUp",tick:e,callsign:t.callsign,runway:s.id});return}if(t.next=null,t.route.length>0){if(this.gateClosed(t)){t.speed=0,this.events.push({type:"holdingShort",tick:e,callsign:t.callsign,at:$(t.node),reason:"crossing"});return}this.advance(t);return}if(t.speed=0,t.vacating){t.vacating=!1,t.phaseTick=e,this.events.push({type:"vacated",tick:e,callsign:t.callsign,via:$(t.node)});return}if(t.isArrival&&t.node===t.stand){let s=this.airport.stands.find(o=>o.id===t.stand);t.heading=s?.heading??t.heading,t.status="parked",t.timer=Math.round(Ps/R);let a=(e-t.phaseTick)*R;this.state.stats.parked++,this.state.stats.taxiInSec+=a,this.state.stats.score+=Ae.parked,this.events.push({type:"parked",tick:e,callsign:t.callsign,stand:t.stand,taxiSec:a});return}if(!t.isArrival&&i.holdShort){let s=this.runwayEnd(),a=this.departurePoint(t,t.node);a?.ok?(t.status="handoff",t.lineupNode=a.runwayNode,t.queuedTick=e,this.events.push({type:"handedToTower",tick:e,callsign:t.callsign,runway:s.id,at:$(t.node),intersection:a.intersection})):a&&this.events.push({type:"wrongHoldingPoint",tick:e,callsign:t.callsign,at:$(t.node),runway:s.id,reason:a.why})}}departurePoint(t,e){if(!this.graph.node(e).holdShort)return null;let i=this.graph.neighbors(e).find(p=>this.graph.node(p.to).onRunway);if(!i)return null;let s=this.runwayEnd(),a=this.runwayEnd(s.oppositeId),o=this.alongRunway(s,this.graph.node(i.to)),d=Math.round(this.alongRunway(s,{x:a.thresholdX,y:a.thresholdY})-Math.max(0,o)),l=i.to!==s.lineupNode,h=ft(t);return d<200?{ok:!1,runwayNode:i.to,remaining:d,intersection:l,why:`${$(e)} is at the far end of runway ${s.id}`}:d<h?{ok:!1,runwayNode:i.to,remaining:d,intersection:l,why:`${$(e)} leaves ${d.toLocaleString("en-US")} m, ${t.type} needs ${h.toLocaleString("en-US")} m`}:{ok:!0,runwayNode:i.to,remaining:d,intersection:l,why:""}}departureOptions(t){let e=[];for(let r of this.airport.nodes){if(!r.holdShort)continue;let i=this.departurePoint(t,r.id);i?.ok&&e.push({hold:r.id,remaining:i.remaining,intersection:i.intersection})}return e.sort((r,i)=>i.remaining-r.remaining)}departureWait(t,e,r){let i=(r-this.lastTakeoffTick)*R,s=Math.max(Gs,jt(this.lastTakeoffCategory,t.category,e));return Math.max(0,s-i)}gateClosed(t){return!t.node||t.route.length===0||t.crossingCleared||t.status==="lineup"?!1:this.graph.node(t.node).holdShort===!0&&this.graph.node(t.route[0]).onRunway===!0}advance(t){t.next||t.route.length===0||this.gateClosed(t)||(t.next=t.route.shift()??null,t.progress=0)}targetSpeed(t){if(t.status==="lineup")return Cs;if(!t.next||t.held&&!this.onRunwayArea(t))return 0;let e=this.edgeLimit(t.node,t.next),r=this.edgeLen(t.node,t.next)-t.progress,i=[t.node,t.next,...t.route];for(let s=1;s<i.length&&r<Se;s++){let a=i[s],o,d=i[s+1],l=s===i.length-1||this.graph.node(a).holdShort===!0&&d!==void 0&&this.graph.node(d).onRunway===!0&&!t.crossingCleared;if(l)o=0;else{let h=J(j(this.graph.node(i[s-1]),this.graph.node(a)),j(this.graph.node(a),this.graph.node(i[s+1])));o=Math.min(h>30?Ts:Lr,this.edgeLimit(a,i[s+1]))}if(e=Math.min(e,Fr(o,r)),l)break;s+1<i.length&&(r+=this.edgeLen(a,i[s+1]))}if(!this.onRunwayArea(t)){let s=this.trafficGap(t,i);s!==null&&(e=Math.min(e,Fr(0,s-Dr)))}return Math.max(0,e)}trafficGap(t,e){let r=null,i=[{x:t.x,y:t.y}];for(let s=1;s<e.length;s++)i.push(this.graph.node(e[s]));for(let s of this.state.aircraft){if(s===t||s.status==="final"||s.status==="parked"||s.status==="ready"||Math.abs(s.x-t.x)>Se||Math.abs(s.y-t.y)>Se)continue;let a=0;for(let o=1;o<i.length&&a<Se;o++){let d=i[o-1],l=i[o],h=Math.hypot(l.x-d.x,l.y-d.y);if(h<1e-6)continue;let p=Math.max(0,Math.min(1,((s.x-d.x)*(l.x-d.x)+(s.y-d.y)*(l.y-d.y))/(h*h))),f=d.x+(l.x-d.x)*p,c=d.y+(l.y-d.y)*p;if(Math.hypot(s.x-f,s.y-c)<_r&&(o>1||p>0)){let u=J(s.heading,j(d,l))<100,m=this.isAhead(s,t);if(u&&!(m&&t.id<s.id)){let b=a+h*p;b>1&&(r===null||b<r)&&(r=b)}break}a+=h}}return r}isAhead(t,e){if(t.status!=="taxi"||!t.next)return!1;let r=[{x:t.x,y:t.y},...[t.next,...t.route].map(s=>this.graph.node(s))],i=0;for(let s=1;s<r.length&&i<Dr*2;s++){let a=r[s-1],o=r[s],d=Math.hypot(o.x-a.x,o.y-a.y);if(d<1e-6)continue;let l=Math.max(0,Math.min(1,((e.x-a.x)*(o.x-a.x)+(e.y-a.y)*(o.y-a.y))/(d*d)));if(Math.hypot(e.x-(a.x+(o.x-a.x)*l),e.y-(a.y+(o.y-a.y)*l))<_r)return!0;i+=d}return!1}takeoffRoll(t,e){if(t.timer>0&&t.timer--,!t.takeoffCleared)return;let r=L(t),i=this.runwayEnd(t.runway??this.state.runway),s=t.speed;if(t.speed=Math.min(r.rotateSpeed,t.speed+r.takeoffAccel*R),t.runwayDist+=(s+t.speed)/2*O*R,this.placeOnRunway(t,i,t.runwayDist),t.speed<r.rotateSpeed)return;let a=(e-t.phaseTick)*R;this.state.stats.departed++,this.state.stats.taxiOutSec+=a,this.state.stats.score+=Ae.departed,this.events.push({type:"departed",tick:e,callsign:t.callsign,runway:i.id,taxiSec:a}),t.status="gone"}final(t,e){let r=L(t),i=this.runwayEnd();if(t.runway=i.id,t.speed=r.approachSpeed,t.runwayDist-=t.speed*O*R,this.placeOnRunway(t,i,-t.runwayDist),t.heading=i.heading,t.runwayDist>0)return;let s=this.runwayOccupant(t);if(s){this.state.stats.goArounds++,this.state.stats.score+=Ae.goAround,this.events.push({type:"goAround",tick:e,callsign:t.callsign,reason:`runway occupied by ${s}`}),t.runwayDist=Xs;return}t.status="landing",t.runwayDist=0,t.speed=r.touchdownSpeed,t.exitNode=this.chooseExit(t,i),this.events.push({type:"touchdown",tick:e,callsign:t.callsign,runway:i.id,exit:$(this.exitHold(t))})}rollout(t){let e=L(t),r=this.runwayEnd(t.runway??this.state.runway),i=this.alongRunway(r,this.graph.node(t.exitNode)),s=t.speed;if(t.runwayDist>=rn){let l=e.rolloutDecel*O,h=Math.sqrt((ve*O)**2+2*l*Math.max(0,i-t.runwayDist))/O;t.speed=Math.max(ve,Math.min(Math.max(Ls,t.speed-e.rolloutDecel*R),h))}let a=(s+t.speed)/2*O*R;if(t.runwayDist+a<i){t.runwayDist+=a,this.placeOnRunway(t,r,t.runwayDist);return}let o=this.exitHold(t),d=this.graph.neighbors(o).find(l=>!this.graph.node(l.to).onRunway).to;t.status="taxi",t.vacating=!0,t.node=t.exitNode,t.next=o,t.route=[d],t.progress=0,t.speed=Math.min(t.speed,ve),t.heading=j(this.graph.node(t.exitNode),this.graph.node(o)),t.crossingCleared=!0,this.place(t)}tower(t){let e=this.state,r=this.runwayEnd(),i=this.nextArrivalSec(),s=this.runwayOccupant(null)!==null,a=e.aircraft.some(u=>u.status==="lineup"||u.status==="takeoff");if(!s&&!a&&i>=Os)for(let u of e.aircraft){if(u.status!=="taxi"||!u.crossingRequested||u.crossingCleared||u.next!==null||!(u.node?this.graph.node(u.node):null)?.holdShort||!u.route[0]||!this.graph.node(u.route[0]).onRunway)continue;let b=u.route[1];if(!(b&&this.someoneNear(this.graph.node(b),Hr,u))){u.crossingCleared=!0,this.events.push({type:"crossingCleared",tick:t,callsign:u.callsign,at:$(u.node)});return}}let o=e.aircraft.find(u=>u.status==="takeoff"&&!u.takeoffCleared);if(o){let u=o.lineupNode!==null&&o.lineupNode!==r.lineupNode;o.timer<=0&&this.runwayOccupant(o)===null&&i>=this.takeoffSec(o)+10&&this.departureWait(o,u,t)<=0&&(o.takeoffCleared=!0,this.lastTakeoffTick=t,this.lastTakeoffCategory=o.category);return}if(i<Pr||e.aircraft.some(u=>{if(u.status!=="taxi"||!u.crossingRequested||u.crossingCleared||u.next!==null||!u.route[0]||!this.graph.node(u.route[0]).onRunway)return!1;let m=u.route[1];return!m||!this.someoneNear(this.graph.node(m),Hr,u)}))return;for(let u of e.aircraft)if(u.status==="lineup"||u.status==="takeoff"||u.status==="taxi"&&this.onRunwayArea(u)&&!u.vacating)return;let l=e.aircraft.filter(u=>u.status==="handoff"&&u.lineupNode!==null).map(u=>{let m=this.graph.node(u.lineupNode),b=u.lineupNode!==r.lineupNode,y=this.alongRunway(r,m),w=0;for(let v of e.aircraft)v.status!=="landing"||v.runwayDist>=y+Ir||(w=Math.max(w,(y+Ir-v.runwayDist)/Math.max(v.speed*O,5)));let S=this.departureWait(u,b,t);return{a:u,wait:S,pass:w,ready:Math.max(S,w)}});if(l.length===0)return;let h=Math.min(...l.map(u=>u.ready)),p=l.filter(u=>u.ready<=h+Us).sort((u,m)=>Oe(u.a.category)-Oe(m.a.category)||u.ready-m.ready||u.a.queuedTick-m.a.queuedTick)[0];if(p.pass>0||p.wait>Ws)return;let f=e.aircraft.some(u=>u.status==="landing"||u.status==="taxi"&&u.vacating&&this.onRunwayArea(u));if(i<Pr+p.wait+(f?Bs:0))return;let c=p.a;c.status="lineup",c.runway=r.id,c.next=c.lineupNode,c.route=[],c.progress=0}takeoffSec(t){let e=L(t);return e.rotateSpeed/e.takeoffAccel}someoneNear(t,e,r){return this.state.aircraft.some(i=>i!==r&&i.status!=="final"&&Math.hypot(i.x-t.x,i.y-t.y)<e)}nextArrivalSec(){let t=1/0;for(let e of this.state.aircraft){if(e.status!=="final")continue;let r=L(e).approachSpeed*O;t=Math.min(t,e.runwayDist/r)}return t}runwayOccupant(t){for(let e of this.state.aircraft)if(e!==t&&(e.status==="landing"||e.status==="lineup"||e.status==="takeoff"||e.status==="taxi"&&this.onRunwayArea(e)))return e.callsign;return null}onRunwayArea(t){let e=t.node?this.graph.node(t.node):null,r=t.next?this.graph.node(t.next):null;return!!(e?.onRunway||r?.onRunway)}crossingAhead(t){let e=[t.node,t.next,...t.route].filter(r=>!!r);for(let r=0;r+1<e.length;r++)if(this.graph.node(e[r]).holdShort&&this.graph.node(e[r+1]).onRunway){if(r>0&&this.graph.node(e[r-1]).onRunway)continue;return e[r]}return null}alongRunway(t,e){let r=t.heading*Math.PI/180;return(e.x-t.thresholdX)*Math.sin(r)+(e.y-t.thresholdY)*Math.cos(r)}placeOnRunway(t,e,r){let i=e.heading*Math.PI/180;t.x=e.thresholdX+Math.sin(i)*r,t.y=e.thresholdY+Math.cos(i)*r,t.heading=e.heading}chooseExit(t,e){let r=L(t),i=r.touchdownSpeed*O,s=ve*O,a=r.rolloutDecel*O,o=rn+(i*i-s*s)/(2*a),d=this.graph.node(t.stand).y,l=this.airport.nodes.filter(c=>c.onRunway).map(c=>({n:c,s:this.alongRunway(e,c)})).filter(c=>c.s>rn&&c.n.id!==e.lineupNode).sort((c,u)=>c.s-u.s),h=c=>!this.someoneNear(this.graph.node(c),60,t),p=c=>this.graph.neighbors(c).filter(u=>this.graph.node(u.to).holdShort&&h(u.to));for(let c of[!0,!1])for(let u of l){if(u.s<o)continue;let m=p(u.n.id).find(b=>!c||Math.sign(this.graph.node(b.to).y)===Math.sign(d));if(m)return t.exitHold=m.to,u.n.id}let f=l[l.length-1].n.id;return t.exitHold=this.graph.neighbors(f).find(c=>this.graph.node(c.to).holdShort)?.to??null,f}exitHold(t){return t.exitHold??t.exitNode??""}checkConflicts(t){let e=this.state,r=e.aircraft.filter(s=>s.status!=="final"&&s.status!=="parked"&&s.status!=="ready");for(let s of e.aircraft)s.inConflict=!1;let i=new Set;for(let s=0;s<r.length;s++)for(let a=s+1;a<r.length;a++){let o=r[s],d=r[a],l=Math.hypot(o.x-d.x,o.y-d.y);if(l>=Is)continue;o.inConflict=d.inConflict=!0;let h=o.id<d.id?`${o.id}-${d.id}`:`${d.id}-${o.id}`;i.add(h),this.conflictPairs.has(h)||(e.stats.conflicts++,e.stats.score+=Ae.conflict,this.events.push({type:"conflict",tick:t,a:o.callsign,b:d.callsign,distance:Math.round(l)}))}this.conflictPairs=i}spawn(t){let{traffic:e}=this.scenario;if(t>=this.nextDeparture){let r=this.freeStand();if(r){let i=r.cargo,s=this.newAircraft(!1,i,r.id,t),a=this.graph.node(r.id);s.x=a.x,s.y=a.y,s.heading=r.heading,s.node=r.id,s.status="parked",s.timer=Math.round(Hs/R),this.state.aircraft.push(s),this.events.push({type:"spawned",tick:t,callsign:s.callsign,isArrival:!1,stand:r.id})}this.nextDeparture=t+this.interval(e.departures)}if(t>=this.nextArrival){let r=Math.max(0,...this.state.aircraft.filter(s=>s.status==="final").map(s=>s.runwayDist)),i=this.freeStand();if(i&&sn-r>=Fs){let s=this.newAircraft(!0,i.cargo,i.id,t);s.status="final",s.runwayDist=sn,s.runway=this.state.runway,this.placeOnRunway(s,this.runwayEnd(),-sn),s.speed=L(s).approachSpeed,this.state.aircraft.push(s),this.events.push({type:"spawned",tick:t,callsign:s.callsign,isArrival:!0,stand:i.id}),this.nextArrival=t+this.interval(e.arrivals)}else this.nextArrival=t+Math.round(20/R)}}interval(t){return Math.max(1,Math.round((t.minIntervalSec+F(this.rng)*(t.maxIntervalSec-t.minIntervalSec))/R))}freeStand(){let t=new Set(this.state.aircraft.filter(s=>s.isArrival||s.status==="parked"||s.status==="ready"||s.status==="pushback").map(s=>s.stand)),e=this.airport.stands.filter(s=>!t.has(s.id));if(e.length===0)return null;let r=F(this.rng)<Ys,i=e.filter(s=>s.cargo===r);return et(this.rng,i.length>0?i:e)}newAircraft(t,e,r,i){let s=this.pickType(e?this.airport.cargoFleet:this.airport.fleet),a=e?this.airport.cargoAirlines:this.airport.airlines,o="";for(let d=0;d<50&&(!o||this.usedCallsigns.has(o));d++)o=et(this.rng,a)+String(ce(this.rng,10,999));return this.usedCallsigns.add(o),{id:this.nextId++,callsign:o,type:s.type,category:s.category,isArrival:t,cargo:e,status:"parked",x:0,y:0,heading:0,speed:0,node:null,next:null,progress:0,route:[],stand:r,held:!1,crossingRequested:!1,crossingCleared:!1,takeoffCleared:!1,lineupNode:null,queuedTick:0,exitHold:null,exitNode:null,vacating:!1,runway:null,runwayDist:0,timer:0,inConflict:!1,spawnTick:i,phaseTick:i}}pickType(t){let e=P.map(s=>t?t[s.type]??0:1),r=e.reduce((s,a)=>s+a,0),i=F(this.rng)*r;for(let s=0;s<P.length;s++)if(i-=e[s],i<0)return P[s];return P[P.length-1]}bestRunway(t,e){let r=i=>-t.speed*Math.cos((i.heading-t.direction)*Math.PI/180);if(e){let i=this.airport.runways.find(s=>s.id===e);if(i&&r(i)<=js)return e}return[...this.airport.runways].sort((i,s)=>r(i)-r(s))[0].id}edgeLen(t,e){return this.graph.link(t,e)?.len??0}edgeLimit(t,e){switch(this.graph.link(t,e)?.edge.kind){case"stand":return Rs;case"taxilane":case"link":return Ms;case"connector":return $s;default:return Lr}}place(t){if(!t.node)return;let e=this.graph.node(t.node);if(!t.next){t.x=e.x,t.y=e.y;return}let r=this.graph.node(t.next),i=Math.hypot(r.x-e.x,r.y-e.y)||1,s=Math.min(1,t.progress/i);t.x=e.x+(r.x-e.x)*s,t.y=e.y+(r.y-e.y)*s,t.heading=j(e,r)}routeNames(t){let e=[];for(let r=1;r<t.length;r++){let i=this.graph.link(t[r-1],t[r])?.edge;!i||i.kind==="stand"||e[e.length-1]!==i.name&&e.push(i.name)}return e}};function Fr(n,t){if(t<=0)return n;let e=Or*O;return Math.sqrt((n*O)**2+2*e*t)/O}function $(n){return n.endsWith("h")?n.slice(0,-1):n}var Gr=[],Wr=[],on=[],Y=(n,t,e,r={})=>Gr.push({id:n,x:t,y:e,...r}),zt=(n,t,e,r)=>Wr.push({a:n,b:t,name:e,kind:r}),mt=(n,t,e)=>{for(let r=1;r<n.length;r++)zt(n[r-1],n[r],t,e)},Ur=[-1750,-750,0,750,1750];for(let n of Ur)Y(`R${n}`,n,0,{onRunway:!0});mt(Ur.map(n=>`R${n}`),"09/27","runway");var Br=[-1750,-750,-600,0,600,750,1750];for(let n of Br)Y(`A${n}`,n,180);mt(Br.map(n=>`A${n}`),"A","taxiway");[-1750,-750,0,750,1750].forEach((n,t)=>{let e=`A${t+1}`;Y(`${e}h`,n,90,{holdShort:!0}),Y(`${e}c`,n,130),mt([`R${n}`,`${e}h`,`${e}c`,`A${n}`],e,"connector")});var Xr=[-750,-450,0,450,750];for(let n of Xr)Y(`B${n}`,n,-180);mt(Xr.map(n=>`B${n}`),"B","taxiway");[-750,0,750].forEach((n,t)=>{let e=`B${t+1}`;Y(`${e}h`,n,-90,{holdShort:!0}),Y(`${e}c`,n,-130),mt([`R${n}`,`${e}h`,`${e}c`,`B${n}`],e,"connector")});var an=[-525,-375,-225,-75,75,225,375,525],jr=[-600,...an.slice(0,4),0,...an.slice(4),600].sort((n,t)=>n-t);for(let n of jr)Y(`T${n}`,n,330);mt(jr.map(n=>`T${n}`),"T","taxilane");[-600,0,600].forEach((n,t)=>zt(`A${n}`,`T${n}`,`J${t+1}`,"link"));an.forEach((n,t)=>{let e=`S${t+1}`;Y(e,n,420),zt(`T${n}`,e,e,"stand"),on.push({id:e,pushNode:`T${n}`,heading:360,cargo:!1})});var Yr=[-300,-100,100,300],Vr=[-450,...Yr,450];for(let n of Vr)Y(`C${n}`,n,-330);mt(Vr.map(n=>`C${n}`),"C","taxilane");[-450,450].forEach((n,t)=>zt(`B${n}`,`C${n}`,`K${t+1}`,"link"));Yr.forEach((n,t)=>{let e=`C${t+1}`;Y(e,n,-420),zt(`C${n}`,e,e,"stand"),on.push({id:e,pushNode:`C${n}`,heading:180,cargo:!0})});var dt={icao:"XGND",name:"Practice field (ground)",elevation:0,halfWidth:1950,halfHeight:520,runwayWidth:45,nodes:Gr,edges:Wr,stands:on,runways:[{id:"27",heading:270,thresholdX:1750,thresholdY:0,holdingPoint:"A5h",lineupNode:"R1750",oppositeId:"09"},{id:"09",heading:90,thresholdX:-1750,thresholdY:0,holdingPoint:"A1h",lineupNode:"R-1750",oppositeId:"27"}],airlines:["IGO","AIC","AKJ","SEJ","AXB","UAE","QTR","BAW","DLH","SIA"],cargoAirlines:["FDX","UPS","BCS","GEC"],fleet:{A20N:30,A21N:14,A320:8,B738:10,AT76:10,DH8D:3,E75L:3,B788:3,B77W:3,A359:2},cargoFleet:{B77W:3,A333:2,B738:2,AT76:1}};var Ks=/^[A-Z]{2,3}\d{1,4}[A-Z]?$/,qs=/^[A-Z]\d{1,2}$/,zs=/^[A-Z]\d{0,2}$/;function Kr(n){let t=n.trim().toUpperCase().split(/\s+/).filter(Boolean);if(t.length===0)return{ok:!1,error:"empty command"};let e=t[0];if(!Ks.test(e))return{ok:!1,error:`"${t[0]}" is not a callsign (select an aircraft or type e.g. IGO123)`};if(t.length===1)return{ok:!1,error:`no instruction for ${e}`};let r=[],i=1;for(;i<t.length;){let s=t[i++];if(s==="PUSH"||s==="P"){let a=t[i++];if(a!=="E"&&a!=="W"&&a!=="N"&&a!=="S")return{ok:!1,error:"PUSH needs a direction to face: E, W, N or S"};r.push({type:"pushback",callsign:e,face:a})}else if(s==="TAXI"||s==="T"){let a=t[i++];if(!a||!qs.test(a))return{ok:!1,error:"TAXI needs a holding point or stand, e.g. TAXI A5 or TAXI S3"};let o=[];if(t[i]==="VIA"||t[i]==="V"){for(i++;i<t.length&&zs.test(t[i])&&!Js(t[i]);)o.push(t[i++]);if(o.length===0)return{ok:!1,error:"VIA needs at least one taxiway, e.g. VIA A"}}r.push(o.length?{type:"taxi",callsign:e,to:a,via:o}:{type:"taxi",callsign:e,to:a})}else if(s==="HOLD"||s==="H")r.push({type:"hold",callsign:e});else if(s==="CONT"||s==="CONTINUE"||s==="C")r.push({type:"continue",callsign:e});else if(s==="CROSS"||s==="X")r.push({type:"cross",callsign:e});else return{ok:!1,error:`unknown instruction "${s}" (use PUSH, TAXI, HOLD, CONT or CROSS)`}}return{ok:!0,callsign:e,commands:r}}function Js(n){return n==="H"||n==="X"||n==="P"}var E={bg:"#101B21",grass:"#16252C",pavement:"#2B3B44",apron:"#26353D",runway:"#4A5A63",runwayEdge:"#C9D4DA",centre:"#E6EEF0",taxiLine:"#C9A227",hold:"#FFC857",label:"#9DB3C0",stand:"#7F98A6",aircraft:"#E6EEF0",departure:"#F2C46D",arrival:"#A8E6C1",selected:"#FFC857",conflict:"#FF5A4E",route:"#7FD3FF",preview:"#FFC857"},ut='"JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace',qr=18,Zs=23,Qs={AT76:27,DH8D:28,CRJ9:25,E75L:28,B77W:65,B788:60,B789:60,A333:60,A359:65},yt=class{constructor(t,e,r){g(this,"canvas",t);g(this,"airport",e);g(this,"graph",r);g(this,"ctx");g(this,"layer");g(this,"w",1);g(this,"h",1);g(this,"dpr",1);g(this,"scale",1);g(this,"hits",[]);g(this,"runway","27");let i=t.getContext("2d");if(!i)throw new Error("Canvas 2D not available");this.ctx=i,this.layer=document.createElement("canvas"),this.resize()}resize(){let t=this.canvas.getBoundingClientRect();this.dpr=window.devicePixelRatio||1,this.w=Math.max(1,t.width),this.h=Math.max(1,t.height);for(let e of[this.canvas,this.layer])e.width=Math.round(this.w*this.dpr),e.height=Math.round(this.h*this.dpr);this.scale=Math.min((this.w-2*qr)/(2*this.airport.halfWidth),(this.h-2*qr)/(2*this.airport.halfHeight)),this.drawStatic()}setRunway(t){t!==this.runway&&(this.runway=t,this.drawStatic())}sx(t){return this.w/2+t*this.scale}sy(t){return this.h/2-t*this.scale}pickAircraft(t,e){let r=this.canvas.getBoundingClientRect(),i=t-r.left,s=e-r.top,a=null,o=16;for(let d of this.hits){let l=Math.hypot(d.x-i,d.y-s);l<o&&(o=l,a=d.id)}if(a!==null)return a;for(let d=this.hits.length-1;d>=0;d--){let l=this.hits[d];if(i>=l.bx-2&&i<=l.bx+l.bw+2&&s>=l.by-2&&s<=l.by+l.bh+2)return l.id}return null}pickNode(t,e){let r=this.canvas.getBoundingClientRect(),i=t-r.left,s=e-r.top,a=null,o=22;for(let d of this.airport.nodes){if(d.onRunway)continue;let l=Math.hypot(this.sx(d.x)-i,this.sy(d.y)-s);l<o&&(o=l,a=d.id)}return a}render(t,e,r,i){let s=this.ctx;s.setTransform(1,0,0,1,0,0),s.drawImage(this.layer,0,0),s.setTransform(this.dpr,0,0,this.dpr,0,0),this.hits=[];let a=t.aircraft.find(o=>o.id===e);a&&a.node&&this.drawRoute([a.node,a.next,...a.route].filter(o=>!!o),E.route,[],a),r&&r.length>1&&this.drawRoute(r,E.preview,[8,6],null),i!==null&&this.drawFinalMarker(i);for(let o of t.aircraft)o.id!==e&&o.status!=="final"&&this.drawAircraft(o,!1);a&&a.status!=="final"&&this.drawAircraft(a,!0)}drawStatic(){let t=this.layer.getContext("2d");if(!t)return;let e=this.airport;t.setTransform(this.dpr,0,0,this.dpr,0,0),t.fillStyle=E.bg,t.fillRect(0,0,this.w,this.h),t.fillStyle=E.grass,t.fillRect(this.sx(-e.halfWidth),this.sy(e.halfHeight),2*e.halfWidth*this.scale,2*e.halfHeight*this.scale),t.lineCap="round",t.lineJoin="round";for(let f of e.edges){if(f.kind==="runway")continue;let c=this.graph.node(f.a),u=this.graph.node(f.b);t.strokeStyle=f.kind==="taxilane"||f.kind==="stand"?E.apron:E.pavement,t.lineWidth=Math.max(3,(f.kind==="taxilane"?40:f.kind==="stand"?30:Zs)*this.scale),t.beginPath(),t.moveTo(this.sx(c.x),this.sy(c.y)),t.lineTo(this.sx(u.x),this.sy(u.y)),t.stroke()}let r=e.runways[0],i=e.runways.find(f=>f.id===r.oppositeId)??e.runways[1],s=e.runwayWidth/2*this.scale,a=this.sx(Math.min(r.thresholdX,i.thresholdX)),o=this.sx(Math.max(r.thresholdX,i.thresholdX)),d=this.sy(0);t.fillStyle=E.runway,t.fillRect(a,d-s,o-a,2*s),t.strokeStyle=E.runwayEdge,t.lineWidth=1,t.strokeRect(a+.5,d-s+.5,o-a-1,2*s-1),t.setLineDash([10,8]),t.strokeStyle=E.centre,t.beginPath(),t.moveTo(a+30,d),t.lineTo(o-30,d),t.stroke(),t.setLineDash([]),t.font=`600 13px ${ut}`,t.fillStyle=E.centre,t.textAlign="center",t.textBaseline="middle";for(let f of e.runways){let c=f.id===this.runway,u=this.sx(f.thresholdX)+(f.thresholdX>0?-16:16);t.fillStyle=c?E.hold:E.centre,t.fillText(f.id,u,d)}t.strokeStyle=E.taxiLine,t.lineWidth=1,t.globalAlpha=.7;for(let f of e.edges){if(f.kind==="runway")continue;let c=this.graph.node(f.a),u=this.graph.node(f.b);t.beginPath(),t.moveTo(this.sx(c.x),this.sy(c.y)),t.lineTo(this.sx(u.x),this.sy(u.y)),t.stroke()}t.globalAlpha=1,t.strokeStyle=E.hold,t.lineWidth=2;for(let f of e.nodes){if(!f.holdShort)continue;let c=Math.max(6,18*this.scale);t.beginPath(),t.moveTo(this.sx(f.x)-c,this.sy(f.y)),t.lineTo(this.sx(f.x)+c,this.sy(f.y)),t.stroke()}t.font=`11px ${ut}`,t.fillStyle=E.label;let l=new Map;for(let f of e.edges)f.kind==="runway"||f.kind==="stand"||l.set(f.name,[...l.get(f.name)??[],f]);for(let[f,c]of l){let u=c[Math.floor(c.length/2)],m=this.graph.node(u.a),b=this.graph.node(u.b),y=(m.x+b.x)/2,w=(m.y+b.y)/2,S=Math.abs(b.x-m.x)<Math.abs(b.y-m.y),v=this.sx(y)+(S?12:0),A=this.sy(w)+(S?0:-10);this.labelBox(t,f,v,A)}t.font=`600 11px ${ut}`;for(let f of e.stands){let c=this.graph.node(f.id);t.strokeStyle=E.stand,t.lineWidth=1;let u=Math.max(5,22*this.scale);t.strokeRect(this.sx(c.x)-u,this.sy(c.y)-u,2*u,2*u),t.fillStyle=E.stand,t.fillText(f.id,this.sx(c.x),this.sy(c.y)+(f.cargo?u+10:-u-9))}let h=this.sx(e.halfWidth)-22,p=this.sy(e.halfHeight)+30;t.fillStyle=E.label,t.beginPath(),t.moveTo(h,p-14),t.lineTo(h+6,p+4),t.lineTo(h,p),t.lineTo(h-6,p+4),t.closePath(),t.fill(),t.font=`600 11px ${ut}`,t.textAlign="center",t.fillText("N",h,p+16),t.textAlign="left",t.font=`600 11px ${ut}`,t.fillStyle=E.label,t.fillText(`${e.icao}  GROUND`,this.sx(-e.halfWidth)+10,this.sy(e.halfHeight)+16),t.font=`11px ${ut}`,t.fillText("Terminal apron",this.sx(-1750),this.sy(330)+4),t.fillText("Cargo apron",this.sx(-1750),this.sy(-330)+4),t.textAlign="center"}labelBox(t,e,r,i){let s=t.measureText(e).width+8;t.fillStyle="rgba(16, 27, 33, 0.85)",t.fillRect(r-s/2,i-8,s,16),t.fillStyle=E.taxiLine,t.textAlign="center",t.textBaseline="middle",t.fillText(e,r,i)}drawRoute(t,e,r,i){if(t.length<2)return;let s=this.ctx;s.strokeStyle=e,s.lineWidth=3,s.setLineDash(r),s.beginPath();let a=!1;i&&i.next&&(s.moveTo(this.sx(i.x),this.sy(i.y)),a=!0);for(let d=i&&i.next?1:0;d<t.length;d++){let l=this.graph.node(t[d]);a?s.lineTo(this.sx(l.x),this.sy(l.y)):(s.moveTo(this.sx(l.x),this.sy(l.y)),a=!0)}s.stroke(),s.setLineDash([]);let o=this.graph.node(t[t.length-1]);s.fillStyle=e,s.beginPath(),s.arc(this.sx(o.x),this.sy(o.y),5,0,Math.PI*2),s.fill()}drawFinalMarker(t){let e=this.ctx,r=this.airport.runways.find(d=>d.id===this.runway);if(!r)return;let i=r.thresholdX>0,s=this.sx(i?this.airport.halfWidth:-this.airport.halfWidth)+(i?-8:8),a=this.sy(0);e.fillStyle=E.arrival,e.beginPath();let o=i?-1:1;e.moveTo(s,a),e.lineTo(s-o*10,a-7),e.lineTo(s-o*10,a+7),e.closePath(),e.fill(),e.font=`11px ${ut}`,e.textAlign=i?"right":"left",e.textBaseline="alphabetic",e.fillText(`final ${t.toFixed(1)} nm`,s-o*14,a-12)}drawAircraft(t,e){let r=this.ctx,i=this.sx(t.x),s=this.sy(t.y),a=(Qs[t.type]??36)*this.scale,o=Math.max(7,a),d=t.inConflict?E.conflict:e?E.selected:t.isArrival?E.arrival:E.departure;r.save(),r.translate(i,s),r.rotate(t.heading*Math.PI/180),r.fillStyle=d,r.beginPath();let l=o*1.05,h=Math.max(1.5,o*.09);r.rect(-h,-l/2,2*h,l),r.moveTo(-o/2,o*.05),r.lineTo(0,-o*.12),r.lineTo(o/2,o*.05),r.lineTo(o/2,o*.14),r.lineTo(0,o*.04),r.lineTo(-o/2,o*.14),r.closePath(),r.moveTo(-o*.2,l/2),r.lineTo(0,l/2-o*.12),r.lineTo(o*.2,l/2),r.closePath(),r.fill(),r.restore(),e&&(r.strokeStyle=E.selected,r.lineWidth=1.5,r.strokeRect(i-o/2-5,s-o/2-5,o+10,o+10));let p=[t.callsign,ta(t)];r.font=`11px ${ut}`,r.textAlign="left",r.textBaseline="alphabetic";let f=i+o/2+6,c=s-4,u=0;for(let m of p)u=Math.max(u,r.measureText(m).width);r.fillStyle="rgba(16, 27, 33, 0.8)",r.fillRect(f-3,c-11,u+6,28),r.fillStyle=d,p.forEach((m,b)=>r.fillText(m,f,c+b*13)),this.hits.push({id:t.id,x:i,y:s,bx:f,by:c-11,bw:u,bh:28})}};function ta(n){switch(n.status){case"parked":return n.isArrival?"ON STAND":n.stand;case"ready":return"PUSH?";case"pushback":return"PUSH";case"starting":return"START";case"handoff":return"TOWER";case"lineup":return"LINE UP";case"takeoff":return"T/O";case"landing":return"SLOWING";case"final":return"FINAL";case"taxi":{if(n.vacating)return"VACATING";let t=n.route[n.route.length-1]??n.next;return n.held?"HOLD":!n.next&&n.route.length>0?`HOLD ${$(n.node??"")}${n.crossingRequested?" X?":""}`:n.next?`TAXI ${$(t??"")}`:"TAXI?"}}}var Jt=[{id:"light",label:"Light",traffic:{departures:{minIntervalSec:240,maxIntervalSec:360,firstSec:3},arrivals:{minIntervalSec:240,maxIntervalSec:360,firstSec:30}}},{id:"normal",label:"Normal",traffic:{departures:{minIntervalSec:180,maxIntervalSec:270,firstSec:3},arrivals:{minIntervalSec:180,maxIntervalSec:270,firstSec:20}}},{id:"busy",label:"Busy",traffic:{departures:{minIntervalSec:140,maxIntervalSec:220,firstSec:3},arrivals:{minIntervalSec:150,maxIntervalSec:210,firstSec:15}}}],Jr=1852,ea=60,Ee=class{constructor(t){g(this,"el",t);g(this,"sim");g(this,"view");g(this,"trafficId","normal");g(this,"seed",1);g(this,"selectedId",null);g(this,"speed",1);g(this,"accumulator",0);g(this,"lastFrame",performance.now());g(this,"active",!1);g(this,"building",null);g(this,"preview",null);g(this,"lastPanel",0);g(this,"lastActionsKey","");g(this,"strips",new Map);g(this,"lastError",-1/0);sa(t.dialTicks),this.sim=this.newSim(),this.view=new yt(t.canvas,dt,this.sim.graph),this.wire(),new ResizeObserver(()=>this.view.resize()).observe(t.canvas)}activate(){this.active||(this.active=!0,this.lastFrame=performance.now(),this.view.resize(),requestAnimationFrame(t=>this.frame(t)))}deactivate(){this.active=!1}newSim(){this.seed=Math.floor(Math.random()*1e6)+1;let t={seed:this.seed,airport:dt,traffic:(Jt.find(e=>e.id===this.trafficId)??Jt[1]).traffic,windVariable:!0};return new Dt(t)}restart(){this.sim=this.newSim(),this.view=new yt(this.el.canvas,dt,this.sim.graph),this.selectedId=null,this.building=null,this.preview=null,this.el.log.replaceChildren();for(let e of this.strips.values())e.li.remove();this.strips.clear(),this.el.depCount.textContent="",this.el.arrCount.textContent="",this.lastActionsKey="",this.lastPanel=0;let t=this.sim.getState().wind;this.logMsg(`Practice field ground, ${this.trafficId} traffic, seed ${this.seed}. Wind ${String(Math.round(t.direction)).padStart(3,"0")}\xB0 ${Math.round(t.speed)} kt, runway ${this.sim.getState().runway} in use.`),this.setSpeed(1)}frame(t){if(this.active){requestAnimationFrame(e=>this.frame(e));try{this.tick(t)}catch(e){t-this.lastError>5e3&&(this.lastError=t,this.logMsg(`Internal error, the game continues: ${e instanceof Error?e.message:String(e)}`,"bad"),console.error(e))}}}tick(t){let e=Math.min(.25,(t-this.lastFrame)/1e3);if(this.lastFrame=t,this.speed>0){this.accumulator+=e*this.speed;let s=Math.floor(this.accumulator/this.sim.dt);this.accumulator-=s*this.sim.dt;for(let a=0;a<s;a++)this.sim.step(),this.handle(this.sim.drainEvents())}let r=this.sim.getState();this.view.setRunway(r.runway);let i=this.nextArrival();this.view.render(r,this.selectedId,this.preview,i),t-this.lastPanel>200&&(this.lastPanel=t,this.panel())}nextArrival(){let t=null;for(let e of this.sim.getState().aircraft)e.status==="final"&&(t===null||e.runwayDist<t)&&(t=e.runwayDist);return t===null?null:t/Jr}panel(){let t=this.sim.getState();this.el.clock.textContent=zr(t.time),this.el.rate.textContent=this.speed===0?"paused":`${this.speed}\xD7 real time`,this.el.windArrow.setAttribute("transform",`rotate(${t.wind.direction})`),this.el.wind.textContent=t.wind.speed<1?"Calm":`${String(Math.round(t.wind.direction)).padStart(3,"0")}\xB0 ${Math.round(t.wind.speed)} kt`,this.el.runway.textContent=`Runway in use: ${t.runway}`;let e=t.stats,r=(s,a)=>a>0?`${Math.round(s/a/60)} min`:"-",i=`
+      <div><dt>Score</dt><dd>${e.score}</dd></div>
+      <div><dt>Departed</dt><dd>${e.departed}</dd></div>
+      <div><dt>Parked</dt><dd>${e.parked}</dd></div>
+      <div><dt>Conflicts</dt><dd class="${e.conflicts?"bad":""}">${e.conflicts}</dd></div>
+      <div><dt>Go-arounds</dt><dd>${e.goArounds}</dd></div>
+      <div><dt>Taxi out / in</dt><dd>${r(e.taxiOutSec,e.departed)} / ${r(e.taxiInSec,e.parked)}</dd></div>`;this.el.stats.innerHTML.replace(/\s+/g,"")!==i.replace(/\s+/g,"")&&(this.el.stats.innerHTML=i),this.updateStrips(),this.updateActions()}updateStrips(){let t=new Set,e=0,r=0;for(let i of this.sim.getState().aircraft){t.add(i.id),i.isArrival?r++:e++;let s=this.strips.get(i.id);if(!s){let d=document.createElement("li");d.dataset.id=String(i.id),d.addEventListener("click",()=>this.select(i.id)),(i.isArrival?this.el.arrivals:this.el.departures).prepend(d),s={li:d,text:"",cls:""},this.strips.set(i.id,s)}let a=`${i.callsign}|${i.type} ${i.category[0].toUpperCase()}|${ra(i,this.sim)}|${na(i)}`;if(a!==s.text){let[d,l,h,p]=a.split("|");s.li.replaceChildren(ke("s-cs",d),ke("s-type",l),ke("s-state",h),ke("s-exit",p)),s.text=a}let o=["strip",i.isArrival?"arr":"dep",i.id===this.selectedId?"sel":"",i.inConflict?"conf":ia(i,this.sim)?"warn":""].filter(Boolean).join(" ");o!==s.cls&&(s.li.className=o,s.cls=o)}for(let[i,s]of this.strips)t.has(i)||(s.li.remove(),this.strips.delete(i),this.selectedId===i&&this.select(null));this.el.depCount.textContent=e?String(e):"",this.el.arrCount.textContent=r?String(r):""}updateActions(){let t=this.selected(),e=t?this.actionsFor(t):[],r=(t?.callsign??"")+"|"+e.map(a=>a.label).join("|")+"|"+(this.building?.join(",")??"");if(r===this.lastActionsKey)return;this.lastActionsKey=r;let i=this.el.actions;if(i.replaceChildren(),!t){i.hidden=!0;return}i.hidden=!1;let s=document.createElement("span");if(s.className="quick-cs",s.textContent=t.callsign,i.append(s),this.building){let a=document.createElement("span");a.className="quick-hint",a.textContent=this.building.length===0?"Click points on the taxiways to build the route":`Route via ${this.routeNames(this.preview??[]).join(" ")}`,i.append(a)}for(let a of e){let o=document.createElement("button");o.type="button",o.textContent=a.label,a.primary&&(o.className="primary"),o.addEventListener("click",()=>{a.run(),this.lastActionsKey="",this.updateActions()}),i.append(o)}}actionsFor(t){let e=[],r=s=>this.issue(`${t.callsign} ${s}`);if(this.building)return this.preview&&this.preview.length>1&&e.push({label:"Send taxi",primary:!0,run:()=>this.sendRoute()}),this.building.length>0&&e.push({label:"Undo point",run:()=>this.undoPoint()}),e.push({label:"Cancel",run:()=>this.cancelRoute()}),e;let i=this.sim.routeStart(t);if(!this.el.helpers())return i&&e.push({label:"Click a route\u2026",run:()=>this.startRoute()}),e;if(t.status==="ready")for(let s of this.pushFaces(t))e.push({label:`Push back, face ${{E:"east",W:"west",N:"north",S:"south"}[s]}`,run:()=>r(`PUSH ${s}`)});if(i){if(t.isArrival)e.push({label:`Taxi to ${t.stand}`,run:()=>r(`TAXI ${t.stand}`)});else for(let s of this.sim.departureOptions(t).slice(0,3)){let a=$(s.hold),o=s.intersection?`Taxi to ${a} (intersection, ${s.remaining.toLocaleString("en-US")} m)`:`Taxi to ${a}`;e.push({label:o,run:()=>r(`TAXI ${a}`)})}e.push({label:"Click a route\u2026",run:()=>this.startRoute()})}if(t.status==="taxi"&&!t.vacating){t.held?e.push({label:"Continue",run:()=>r("CONT")}):!this.sim.onRunwayArea(t)&&(t.next||t.route.length>0)&&e.push({label:"Hold position",run:()=>r("HOLD")});let s=this.sim.crossingAhead(t);s&&!t.crossingRequested&&!t.crossingCleared&&e.push({label:`Request crossing at ${$(s)}`,run:()=>r("CROSS")})}return e}pushFaces(t){let e=dt.stands.find(s=>s.id===t.stand);if(!e)return[];let r={N:0,E:90,S:180,W:270},i=[];for(let s of["E","W","N","S"])this.sim.graph.neighbors(e.pushNode).some(o=>(o.edge.kind==="taxilane"||o.edge.kind==="link")&&J(o.bearing,r[s])<30)&&i.push(s);return i}startRoute(){this.building=[],this.preview=null,this.logMsg("Click points on the taxiways in order; the route is drawn dashed. Send taxi when it is right.")}addPoint(t){let e=this.selected();if(!e||!this.building)return;let r=this.sim.planRoute(e.callsign,[...this.building,t]);if(!r){this.logMsg(`No allowed route to ${$(t)} from there (no sharp turns, no taxiing on the runway).`,"bad");return}this.building.push(t),this.preview=r,this.lastActionsKey=""}undoPoint(){let t=this.selected();!t||!this.building||(this.building.pop(),this.preview=this.building.length?this.sim.planRoute(t.callsign,this.building):null)}cancelRoute(){this.building=null,this.preview=null}sendRoute(){let t=this.selected();!t||!this.preview||(this.sim.command({type:"taxi",callsign:t.callsign,route:this.preview}),this.handle(this.sim.drainEvents()),this.cancelRoute())}routeNames(t){let e=[];for(let i=1;i<t.length;i++){let s=this.sim.graph.link(t[i-1],t[i])?.edge;!s||s.kind==="stand"||e[e.length-1]!==s.name&&e.push(s.name)}let r=t[t.length-1];return r?[...e,`to ${$(r)}`]:e}wire(){let{canvas:t,form:e,input:r}=this.el;t.addEventListener("pointerdown",i=>{if(i.preventDefault(),this.building){let a=this.view.pickNode(i.clientX,i.clientY);if(a){this.addPoint(a);return}}let s=this.view.pickAircraft(i.clientX,i.clientY);(s!==null||!this.building)&&this.select(s)}),t.addEventListener("pointermove",i=>{let s=this.building?this.view.pickNode(i.clientX,i.clientY)!==null:this.view.pickAircraft(i.clientX,i.clientY)!==null;t.style.cursor=s?"pointer":"default"}),e.addEventListener("submit",i=>{i.preventDefault();let s=r.value.trim();if(!s)return;let a=this.selected(),o=s.split(/\s+/)[0].toUpperCase();a&&!/^[A-Z]{2,3}\d{1,4}[A-Z]?$/.test(o)&&(s=`${a.callsign} ${s}`),this.issue(s),r.value=a?`${a.callsign} `:""}),r.addEventListener("keydown",i=>{i.key==="Escape"&&this.select(null)});for(let i of this.el.speedButtons)i.addEventListener("click",()=>this.setSpeed(Number(i.dataset.gspeed)));this.el.newGame.addEventListener("click",()=>this.restart())}start(t){this.trafficId=Jt.some(e=>e.id===t)?t:"normal",this.restart()}pause(){this.setSpeed(0)}refresh(){this.lastActionsKey="",this.lastPanel=0}issue(t){let e=Kr(t);if(!e.ok){this.logMsg(e.error,"bad");return}for(let i of e.commands)this.sim.command(i);this.handle(this.sim.drainEvents());let r=this.sim.getState().aircraft.find(i=>i.callsign===e.callsign);r&&(this.selectedId=r.id),this.lastActionsKey="",this.lastPanel=0}select(t){this.selectedId=t,this.cancelRoute();let e=this.selected();this.el.input.value=e?`${e.callsign} `:"",this.lastActionsKey="",this.lastPanel=0}selected(){return this.sim.getState().aircraft.find(t=>t.id===this.selectedId)}setSpeed(t){this.speed=t,this.accumulator=0;for(let e of this.el.speedButtons)e.setAttribute("aria-pressed",String(Number(e.dataset.gspeed)===t))}handle(t){for(let e of t)switch(e.type){case"spawned":this.logMsg(e.isArrival?`${e.callsign} on final, stand ${e.stand}`:`${e.callsign} at stand ${e.stand}`);break;case"pushbackRequested":this.logMsg(`${e.callsign} at ${e.stand}, ready for pushback`,"warn");break;case"readyToTaxi":this.logMsg(`${e.callsign} ready to taxi`,"warn");break;case"holdingShort":this.logMsg(`${e.callsign} holding short of the runway at ${e.at}`,"warn");break;case"crossingCleared":this.logMsg(`Tower: ${e.callsign} cross runway at ${e.at}`,"ok");break;case"handedToTower":this.logMsg(`${e.callsign} at ${e.at}${e.intersection?" (intersection)":""}, with tower for runway ${e.runway}`,"ok");break;case"wrongHoldingPoint":this.logMsg(`${e.callsign} cannot depart from ${e.at} (runway ${e.runway} in use): ${e.reason}`,"bad");break;case"linedUp":this.logMsg(`${e.callsign} lining up runway ${e.runway}`);break;case"departed":this.logMsg(`${e.callsign} airborne from ${e.runway}, taxi-out ${Math.round(e.taxiSec/60)} min`,"ok");break;case"touchdown":this.logMsg(`${e.callsign} landed ${e.runway}, vacating at ${e.exit}`);break;case"vacated":this.logMsg(`${e.callsign} clear of the runway at ${e.via}, needs taxi`,"warn");break;case"parked":this.logMsg(`${e.callsign} on stand ${e.stand}, taxi-in ${Math.round(e.taxiSec/60)} min`,"ok");break;case"goAround":this.logMsg(`${e.callsign} going around: ${e.reason}`,"bad");break;case"conflict":this.logMsg(`Ground conflict: ${e.a} and ${e.b}, ${e.distance} m apart`,"bad");break;case"runwayChanged":this.logMsg(`Wind shift: runway ${e.runway} now in use`,"warn");break;case"commandAccepted":this.logMsg(e.message,"ok");break;case"commandRejected":this.logMsg(e.message,"bad");break}}logMsg(t,e="info"){let r=document.createElement("li");r.className=e;let i=document.createElement("time");for(i.textContent=zr(this.sim.getState().time).slice(3),r.append(i,document.createTextNode(" "+t)),this.el.log.prepend(r);this.el.log.childElementCount>ea;)this.el.log.lastElementChild?.remove()}};function ke(n,t){let e=document.createElement("span");return e.className=n,e.textContent=t,e}function zr(n){let t=Math.floor(n/3600),e=Math.floor(n%3600/60),r=Math.floor(n%60);return`${String(t).padStart(2,"0")}:${String(e).padStart(2,"0")}:${String(r).padStart(2,"0")}`}function na(n){return n.isArrival?`Stand ${n.stand}${n.cargo?" (cargo)":""}`:`From stand ${n.stand}${n.cargo?" (cargo)":""}`}function ra(n,t){switch(n.status){case"parked":return n.isArrival?"On stand":"Boarding";case"ready":return"Ready for pushback";case"pushback":return"Pushing back";case"starting":return"Starting engines";case"handoff":return`With tower at ${$(n.node??"")}${n.lineupNode&&n.lineupNode!==t.runwayEnd().lineupNode?" (intersection)":""}`;case"lineup":return`Lining up ${n.runway??""}`;case"takeoff":return`Taking off ${n.runway??""}`;case"final":return`Final ${(n.runwayDist/Jr).toFixed(1)} nm`;case"landing":return`Landed, slowing ${n.runway??""}`;case"taxi":{if(n.vacating)return"Vacating";if(n.held)return"Holding position";if(!n.next&&n.route.length>0){let r=$(n.node??"");return n.crossingCleared?`Crossing at ${r}`:n.crossingRequested?`Holding short ${r}, crossing requested`:`Holding short ${r}`}if(!n.next)return n.isArrival?"Clear of runway, needs taxi":"Needs taxi";let e=n.route[n.route.length-1]??n.next;return`Taxi to ${$(e)}${t.onRunwayArea(n)?", crossing":""}`}}}function ia(n,t){return n.status==="ready"?!0:n.status==="taxi"&&!n.vacating&&!n.next?n.route.length===0?!0:!n.crossingRequested&&t.crossingAhead(n)!==null:!1}function sa(n){let t="http://www.w3.org/2000/svg";for(let e=0;e<360;e+=30){let r=document.createElementNS(t,"line");r.setAttribute("y1","-40"),r.setAttribute("y2",e%90===0?"-33":"-36"),r.setAttribute("transform",`rotate(${e})`),r.setAttribute("class","dial-tick"),n.append(r)}}var X={labelSize:"normal",trail:"short",leaderSec:60,rangeRings:!1,fixNames:!0,arrivals:"normal",departures:"normal",turboprops:"normal",heavies:"normal",wind:"variable",windStrength:"moderate",lateralNm:3,verticalFt:1e3,separateLanding:!1,landingClearanceNm:4,conflictAlerts:!0,pauseOnLoss:!1,pauseOnGoAround:!1,sound:!1,quickButtons:!0},Zr=[["none","None"],["fewer","Fewer"],["normal","Normal"],["more","More"]],Qr=[["fewer","Fewer"],["normal","As the traffic level"],["more","More"]],ni=[{title:"Scope display",when:"Applies now.",inGame:!0,fields:[{key:"labelSize",label:"Label size",choices:[["small","Small"],["normal","Normal"],["large","Large"]]},{key:"trail",label:"History trail",choices:[["off","Off"],["short","Short (24 s)"],["long","Long (60 s)"]]},{key:"leaderSec",label:"Leader line",choices:[["0","Off"],["30","30 s"],["60","60 s"],["120","2 min"]]},{key:"rangeRings",label:"Range rings every 10 nm"},{key:"fixNames",label:"Fix names"}]},{title:"Traffic and weather",when:"Applies from the next session.",inGame:!1,fields:[{key:"arrivals",label:"Arrivals",choices:Qr},{key:"departures",label:"Departures",choices:Qr},{key:"turboprops",label:"Turboprops",choices:Zr},{key:"heavies",label:"Heavies",choices:Zr},{key:"wind",label:"Wind",choices:[["variable","Shifts during the session"],["fixed","Fixed"]]},{key:"windStrength",label:"Wind strength",choices:[["calm","Calm"],["light","Light"],["moderate","Moderate"],["strong","Strong"]]}]},{title:"Rules",when:"Applies from the next session.",inGame:!1,fields:[{key:"lateralNm",label:"Lateral separation",choices:[["3","3 nm"],["5","5 nm"]]},{key:"verticalFt",label:"Vertical separation",choices:[["1000","1,000 ft"],["2000","2,000 ft"]]},{key:"separateLanding",label:"Separate landing clearance",hint:"I only clears the approach; L must follow before the limit below, or the aircraft goes around."},{key:"landingClearanceNm",label:"Landing clearance by",choices:[["2","2 nm"],["4","4 nm"],["6","6 nm"]]}]},{title:"Assistance",when:"Applies now.",inGame:!0,fields:[{key:"conflictAlerts",label:"Conflict alerts (orange)"},{key:"pauseOnLoss",label:"Pause on a separation loss"},{key:"pauseOnGoAround",label:"Pause on a go-around"},{key:"sound",label:"Sound alerts"},{key:"quickButtons",label:"Helper buttons (both modes)",hint:"Off: type every instruction yourself. Ground mode keeps the button for clicking a route on the map."}]}],ri="atc-sim-settings";function ii(){try{let n=localStorage.getItem(ri);if(n)return aa(JSON.parse(n))}catch{}return{...X}}function dn(n){try{localStorage.setItem(ri,JSON.stringify(n))}catch{}}function aa(n){let t={...X};if(!n||typeof n!="object")return t;let e=n;for(let r of ni)for(let i of r.fields){let s=e[i.key],a=X[i.key];typeof s==typeof a&&(i.choices&&!i.choices.some(([o])=>o===String(s))||(t[i.key]=s))}return t}var ti={fewer:1.5,normal:1,more:.67},ei={none:0,fewer:.5,normal:1,more:2};function un(n,t){let e=(i,s)=>({...i,minIntervalSec:Math.round(i.minIntervalSec*s),maxIntervalSec:Math.round(i.maxIntervalSec*s)}),r={arrivals:e(n.arrivals,ti[t.arrivals]),departures:e(n.departures,ti[t.departures])};return(t.turboprops!=="normal"||t.heavies!=="normal")&&(r.mix={turboprop:ei[t.turboprops],heavy:ei[t.heavies]}),r}function cn(n){return{variable:n.wind==="variable",strength:n.windStrength}}function hn(n){let t={};return(n.lateralNm!==3||n.verticalFt!==1e3)&&(t.separation={lateralNm:n.lateralNm,verticalFt:n.verticalFt}),n.separateLanding&&(t.requireLandingClearance=!0,t.landingClearanceNm=n.landingClearanceNm),Object.keys(t).length>0?t:void 0}function Te(n){return{...It,labelPx:n.labelSize==="small"?10:n.labelSize==="large"?13:11,leaderSec:n.leaderSec,rangeRings:n.rangeRings,fixNames:n.fixNames,conflictAlerts:n.conflictAlerts}}function Me(n){return n.trail==="off"?0:n.trail==="long"?15:6}function si(n,t,e){n.replaceChildren();let r=document.createElement("form");r.method="dialog",r.className="settings-form";let i=document.createElement("div");i.className="settings-head";let s=document.createElement("h2");s.textContent="Settings";let a=document.createElement("p");a.className="settings-note",a.textContent="Apply at once. Airport, traffic, weather and rules are chosen on the main menu.";let o=ln("Close","ghost");o.addEventListener("click",()=>n.close()),i.append(s,o),r.append(i,a);let d=new Map;for(let u of ni){if(!u.inGame)continue;let m=document.createElement("fieldset"),b=document.createElement("legend");b.textContent=u.title,m.append(b);for(let y of u.fields){let w=document.createElement("label");w.className=y.choices?"settings-row":"settings-row check";let S=document.createElement("span");S.textContent=y.label;let v;if(y.choices){let A=document.createElement("select");for(let[H,G]of y.choices)A.add(new Option(G,H));v=A,w.append(S,A)}else{let A=document.createElement("input");A.type="checkbox",v=A,w.append(A,S)}if(d.set(y.key,v),m.append(w),y.hint){let A=document.createElement("p");A.className="settings-hint",A.textContent=y.hint,m.append(A)}}r.append(m)}let l=document.createElement("div");l.className="settings-actions";let h=ln("Defaults","link"),p=ln("Save","primary");l.append(h,p),r.append(l),n.append(r);let f=()=>{let u={...t()};for(let[m,b]of d){let y=X[m];b instanceof HTMLInputElement?u[m]=b.checked:u[m]=typeof y=="number"?Number(b.value):b.value}return u},c=u=>{for(let[m,b]of d){let y=u[m];b instanceof HTMLInputElement?b.checked=!!y:b.value=String(y)}};h.addEventListener("click",()=>c({...f(),...oa(X,[...d.keys()])})),p.addEventListener("click",()=>{let u=f();dn(u),e(u),n.close()}),n.addEventListener("settings-open",()=>c(t()))}function oa(n,t){let e={};for(let r of t)e[r]=n[r];return e}function ln(n,t){let e=document.createElement("button");return e.type="button",e.className=t,e.textContent=n,e}var _t=null;function fn(n){try{_t??(_t=new AudioContext);let t=_t.createOscillator(),e=_t.createGain();t.type="square",t.frequency.value=n==="loss"?440:880,e.gain.value=.05,t.connect(e).connect(_t.destination);let r=_t.currentTime;t.start(r),t.stop(r+(n==="loss"?.45:.15))}catch{}}var la=["arrivals","departures","turboprops","heavies","wind","windStrength","lateralNm","verticalFt","separateLanding","landingClearanceNm","conflictAlerts","pauseOnLoss","quickButtons"],pn={arrivals:X.arrivals,departures:X.departures,turboprops:X.turboprops,heavies:X.heavies,wind:X.wind,windStrength:X.windStrength,lateralNm:3,verticalFt:1e3,separateLanding:!1,landingClearanceNm:4,conflictAlerts:!0,pauseOnLoss:!1,quickButtons:!0},Z=[{id:"training",label:"Training",blurb:"Light traffic, steady light wind. Pauses when separation is lost.",traffic:"light",values:{...pn,wind:"fixed",windStrength:"light",turboprops:"fewer",heavies:"fewer",pauseOnLoss:!0}},{id:"standard",label:"Standard",blurb:"Normal traffic and a shifting moderate wind.",traffic:"normal",values:{...pn}},{id:"expert",label:"Expert",blurb:"Busy traffic, strong shifting wind, more heavies, separate landing clearance.",traffic:"busy",values:{...pn,windStrength:"strong",turboprops:"more",heavies:"more",separateLanding:!0,landingClearanceNm:4}}];function ai(n,t){let e=Z.find(r=>r.id===n)??Z[1];return{traffic:e.traffic,settings:{...t,...e.values}}}function Re(n){for(let t of Z)if(t.traffic===n.traffic&&la.every(e=>da(e,t.values,n.settings)))return t.id;return"custom"}function da(n,t,e){return n==="landingClearanceNm"&&!t.separateLanding&&!e.separateLanding?!0:t[n]===e[n]}var di=[["light","Light"],["normal","Normal"],["busy","Busy"]],oi=[["fewer","Fewer"],["normal","As level"],["more","More"]],li=[["none","None"],["fewer","Fewer"],["normal","Normal"],["more","More"]],ua=[["on","On"],["off","Off"]];function Zt(n,t,e){return{name:n,choices:e,get:r=>String(r.settings[t]),set:(r,i)=>{let s=r.settings[t];r.settings[t]=typeof s=="number"?Number(i):i}}}function $e(n,t,e,r=!0){return{label:n,approachOnly:r,parts:[Zt(n,t,e)]}}function gn(n,t,e=!0){return{label:n,approachOnly:e,parts:[{name:n,choices:ua,get:r=>r.settings[t]?"on":"off",set:(r,i)=>{r.settings[t]=i==="on"}}]}}var ca=[{title:"Traffic",rows:[{label:"Level",approachOnly:!1,parts:[{name:"Traffic level",choices:di,get:n=>n.traffic,set:(n,t)=>{n.traffic=t}}]},$e("Arrivals","arrivals",oi),$e("Departures","departures",oi),$e("Turboprops","turboprops",li),$e("Heavies","heavies",li)]},{title:"Weather and rules",rows:[{label:"Wind",approachOnly:!0,parts:[Zt("Wind strength","windStrength",[["calm","Calm"],["light","Light"],["moderate","Moderate"],["strong","Strong"]]),Zt("Wind changes","wind",[["variable","Shifting"],["fixed","Steady"]])]},{label:"Separation",approachOnly:!0,parts:[Zt("Lateral separation","lateralNm",[["3","3 nm"],["5","5 nm"]]),Zt("Vertical separation","verticalFt",[["1000","1,000 ft"],["2000","2,000 ft"]])]},{label:"Landing clearance",approachOnly:!0,parts:[{name:"Landing clearance",choices:[["off","With approach"],["2","Separate, 2 nm"],["4","Separate, 4 nm"],["6","Separate, 6 nm"]],get:n=>n.settings.separateLanding?String(n.settings.landingClearanceNm):"off",set:(n,t)=>{n.settings.separateLanding=t!=="off",t!=="off"&&(n.settings.landingClearanceNm=Number(t))}}]}]},{title:"Assistance",rows:[gn("Conflict alerts","conflictAlerts"),gn("Pause on separation loss","pauseOnLoss"),gn("Helper buttons","quickButtons",!1)]}],ui="atc-sim-menu",Ce=class{constructor(t){g(this,"o",t);g(this,"root",C("menu"));g(this,"canvas",C("menu-preview"));g(this,"map");g(this,"mode");g(this,"traffic");g(this,"customPicked",!1);g(this,"controls",new Map);g(this,"rowEls",new Map);let e=ha();this.map=z(t.initial.map??e.map);let r=t.initial.mode??e.mode;this.mode=r==="ground"&&this.map.modes.includes("ground")?"ground":"approach";let i=t.initial.traffic??e.traffic;this.traffic=i==="light"||i==="busy"?i:"normal",C("menu-version").textContent=C("version").textContent??"",this.buildAirports(),this.buildModes(),this.buildDifficulty(),this.buildControls(),this.wire(),new ResizeObserver(()=>this.drawPreview()).observe(this.canvas),this.refresh()}show(){this.root.hidden=!1,this.refresh()}hide(){this.root.hidden=!0}get visible(){return!this.root.hidden}choice(){return{traffic:this.traffic,settings:{...this.o.settings()}}}commit(t){this.traffic=t.traffic,dn(t.settings),this.o.onSettings(t.settings),this.save(),this.refresh()}save(){try{localStorage.setItem(ui,JSON.stringify({map:this.map.id,mode:this.mode,traffic:this.traffic}))}catch{}}difficulty(){let t=Re(this.choice());return this.customPicked?"custom":t}buildAirports(){let t=C("menu-airports");for(let e of lt){let r=document.createElement("button");r.type="button",r.className="airport",r.dataset.map=e.id,r.setAttribute("role","radio");let i=document.createElement("span");i.className="airport-head";let s=document.createElement("span");s.className="airport-name",s.textContent=e.label;let a=document.createElement("span");a.className="airport-icao",a.textContent=e.code,i.append(s,a);let o=document.createElement("span");o.className="airport-blurb",o.textContent=e.blurb;let d=document.createElement("span");d.className="airport-modes",d.textContent=e.modes.map(l=>l==="approach"?"Approach":"Ground").join(" \xB7 "),r.append(i,o,d),r.addEventListener("click",()=>{this.map=z(e.id),this.map.modes.includes(this.mode)||(this.mode="approach"),this.save(),this.refresh()}),t.append(r)}}buildModes(){for(let t of this.root.querySelectorAll("[data-menu-mode]"))t.addEventListener("click",()=>{let e=t.dataset.menuMode==="ground"?"ground":"approach";this.map.modes.includes(e)&&(this.mode=e,this.save(),this.refresh())})}buildDifficulty(){let t=C("menu-difficulty"),e=[...Z.map(r=>r.id),"custom"];for(let r of e){let i=document.createElement("button");i.type="button",i.dataset.difficulty=r,i.textContent=r==="custom"?"Custom":Z.find(s=>s.id===r)?.label??r,i.addEventListener("click",()=>{if(r==="custom"){this.customPicked=!0,this.refresh();return}this.customPicked=!1,this.commit(ai(r,this.o.settings()))}),t.append(i)}}buildControls(){let t=C("menu-controls");for(let e of ca){let r=document.createElement("fieldset"),i=document.createElement("legend");i.textContent=e.title,r.append(i);for(let s of e.rows){let a=document.createElement("div");a.className="m-row";let o=document.createElement("span");o.textContent=s.label;let d=document.createElement("span");d.className=s.parts.length>1?"m-sels two":"m-sels";for(let l of s.parts){let h=document.createElement("select");h.setAttribute("aria-label",l.name);for(let[p,f]of l.choices)h.add(new Option(f,p));h.addEventListener("change",()=>{let p=this.choice();l.set(p,h.value),this.customPicked=!1,this.commit(p)}),d.append(h),this.controls.set(l,{sel:h,row:s})}a.append(o,d),r.append(a),this.rowEls.set(s,a)}t.append(r)}}wire(){C("menu-start").addEventListener("click",()=>this.start());let t=C("menu-load-file");C("menu-load").addEventListener("click",()=>t.click()),t.addEventListener("change",async()=>{let r=t.files?.[0];if(t.value="",!r)return;let i=await this.o.onLoad(r);C("menu-error").textContent=i??""});let e=C("help-dialog");C("menu-help").addEventListener("click",()=>e.showModal()),C("help-close").addEventListener("click",()=>e.close()),document.addEventListener("keydown",r=>{!this.visible||e.open||r.key==="Enter"&&!(r.target instanceof HTMLSelectElement)&&!(r.target instanceof HTMLButtonElement)&&(r.preventDefault(),this.start())})}start(){C("menu-error").textContent="",this.save(),this.o.onStart({map:this.map,mode:this.mode,traffic:this.traffic,settings:{...this.o.settings()}})}refresh(){let t=this.choice(),e=this.difficulty();for(let a of this.root.querySelectorAll(".airport"))a.setAttribute("aria-checked",String(a.dataset.map===this.map.id));let r=this.map.modes.includes("ground");for(let a of this.root.querySelectorAll("[data-menu-mode]")){let o=a.dataset.menuMode;a.setAttribute("aria-pressed",String(o===this.mode)),o==="ground"&&(a.disabled=!r)}C("menu-mode-note").textContent=r?this.mode==="ground"?"You run the surface: pushback, taxi, crossings. The tower and the air are automatic, so only the traffic level and helper buttons apply.":"You run the radar: vector, sequence and clear every arrival and departure.":`Ground control is not available at ${this.map.label} yet.`;for(let a of C("menu-difficulty").querySelectorAll("button"))a.setAttribute("aria-pressed",String(a.dataset.difficulty===e));C("menu-difficulty-note").textContent=e==="custom"?"Your own values. Pick a preset to reset them.":Z.find(a=>a.id===e)?.blurb??"";let i=this.mode==="ground";for(let[a,{sel:o,row:d}]of this.controls){o.value=a.get(t);let l=i&&d.approachOnly;o.disabled=l,this.rowEls.get(d)?.classList.toggle("off",l)}let s=e==="custom"?"Custom":Z.find(a=>a.id===e)?.label??"";C("menu-summary").textContent=[this.map.label,i?"Ground control":"Approach radar",s,`${di.find(([a])=>a===this.traffic)?.[1]??""} traffic`].join("  \xB7  "),C("menu-load").hidden=i,this.drawPreview()}drawPreview(){if(this.root.hidden)return;let t=this.map.airport,e=this.mode==="ground";if(e){let i=new Dt({seed:1,airport:dt,traffic:Jt[1].traffic,windVariable:!1});new yt(this.canvas,dt,i.graph).render(i.getState(),null,null,null)}else{let i=new nt(Kt(1,this.map.id)),s=new gt(this.canvas,t,{...It,rangeRings:!0,fixNames:!0});s.setRunwaysInUse(t.runways.map(a=>a.id)),s.render(i.getState(),new Map,1,null,new Map)}C("preview-icao").textContent=this.map.code,C("preview-name").textContent=e?`${this.map.label}, surface`:this.map.id==="vabb"?`${t.name}, ${t.city}`:this.map.label;let r=new Set;for(let i of t.runways)r.add([i.id,i.oppositeId].sort().join("/"));C("preview-facts").textContent=e?"Runway 09/27 \xB7 3,500 m \xB7 Stands S1-S8, cargo C1-C4":`Runways ${[...r].join(", ")} \xB7 Elevation ${t.elevation} ft \xB7 ${t.fixes.filter(i=>i.kind!=="exit").length} fixes`}};function ha(){try{let n=localStorage.getItem(ui),t=n?JSON.parse(n):null;if(t&&typeof t=="object"){let e=t,r=i=>typeof i=="string"?i:void 0;return{map:r(e.map),mode:r(e.mode),traffic:r(e.traffic)}}}catch{}return{}}function C(n){let t=document.getElementById(n);if(!t)throw new Error(`#${n} missing`);return t}var xt=Ia(),rt=Number(xt.get("seed"))||xn(),Q=z(xt.get("map")),it=Ct(xt.get("traffic")).id,T=ii(),Ne=un(Ct(it).profile,T),Ie=cn(T),De=hn(T),x=n=>{let t=document.getElementById(n);if(!t)throw new Error(`#${n} missing`);return t},Ft=x("radar"),V=x("command"),fa=x("command-form"),Qt=x("quick"),pa=x("clock"),ga=x("rate"),ma=x("stats"),_e=x("log"),ya=x("seed");x("version").textContent=Lt;for(let n of document.querySelectorAll(".version-number"))n.textContent=Lt;document.title=`ATC Simulator ${Lt}`;var ba=x("wind-arrow"),xa=x("wind-text"),wa=x("runways-in-use"),bi=Array.from(document.querySelectorAll("[data-speed]"));Ta();var M=new nt(Kt(rt,Q.id,Ne,Ie,De)),ht=new gt(Ft,Q.airport,Te(T)),xi=new xe(x("arrivals"),x("departures"),x("arr-count"),x("dep-count"),n=>Ut(n)),st=null,Ht=0,Pt=0,ci=performance.now(),Pe=new Map,bt=new Map,va=Math.round(4/_),te=Me(T),Sa=8,mn=0,hi=performance.now();function fi(n){n&&(Pe=new Map(M.getState().aircraft.map(t=>[t.id,{x:t.x,y:t.y}]))),M.step(),mn+=_,M.tick%va===0&&ka(),vi(M.drainEvents())}var pi=-1/0;function wi(n){requestAnimationFrame(wi);try{Aa(n)}catch(t){n-pi>5e3&&(pi=n,D(`Internal error, the game continues: ${t instanceof Error?t.message:String(t)}`,"bad"),console.error(t))}}function Aa(n){let t=Math.min(.25,(n-ci)/1e3);if(ci=n,re!=="approach"||!Gt)return;let e=1;if(Ht==="max"){let i=n+Sa;for(;performance.now()<i;)for(let s=0;s<50;s++)fi(!1);Pe.clear(),Pt=0}else if(Ht>0){Pt+=t*Ht;let i=Math.floor(Pt/_);Pt-=i*_;for(let s=0;s<i;s++)fi(s===i-1);e=Pt/_}let r=M.getState();ht.setRunwaysInUse(r.runwaysInUse),ht.render(r,Pe,e,st,bt),Ea(n)}function ka(){let n=new Set;for(let t of M.getState().aircraft){if(t.status!=="airborne"||te===0)continue;n.add(t.id);let e=bt.get(t.id);for(e||(e={points:[]},bt.set(t.id,e)),e.points.push({x:t.x,y:t.y});e.points.length>te;)e.points.shift()}for(let t of bt.keys())n.has(t)||bt.delete(t)}var ee=0,yn="",Ot="";function Ea(n){if(n-ee<200)return;ee=n;let t=M.getState();pa.textContent=ne(t.time);let e=(n-hi)/1e3;if(e>=1){let a=mn/e;ga.textContent=Ht===0?"paused":`${a>=100?Math.round(a).toLocaleString("en-US"):a.toFixed(1)}\xD7 real time`,mn=0,hi=n}let{wind:r}=t;ba.setAttribute("transform",`rotate(${r.direction})`),xa.textContent=r.speed<1?"Calm":`${String(r.direction).padStart(3,"0")}\xB0 ${Math.round(r.speed)} kt`,wa.textContent=`In use: ${t.runwaysInUse.join(", ")||"none"}`;let i=t.stats,s=`
+    <div><dt>Score</dt><dd>${i.score}</dd></div>
+    <div><dt>Landed</dt><dd>${i.landed}</dd></div>
+    <div><dt>Departed</dt><dd>${i.departed}</dd></div>
+    <div><dt>Sep. losses</dt><dd class="${i.separationLosses?"bad":""}">${i.separationLosses}</dd></div>
+    <div><dt>Go-arounds</dt><dd>${i.missedApproaches}</dd></div>
+    <div><dt>Bad exits</dt><dd class="${i.wrongExits+i.leftAirspace?"bad":""}">${i.wrongExits+i.leftAirspace}</dd></div>`;s!==yn&&(ma.innerHTML=s,yn=s),xi.update(t,st),Ra(t.aircraft.find(a=>a.id===st),t.runwaysInUse)}function ne(n){let t=Math.floor(n/3600),e=Math.floor(n%3600/60),r=Math.floor(n%60);return`${String(t).padStart(2,"0")}:${String(e).padStart(2,"0")}:${String(r).padStart(2,"0")}`}function Ta(){let n=document.getElementById("dial-ticks");if(!n)return;let t="http://www.w3.org/2000/svg";for(let e=0;e<360;e+=30){let r=document.createElementNS(t,"line");r.setAttribute("y1","-40"),r.setAttribute("y2",e%90===0?"-33":"-36"),r.setAttribute("transform",`rotate(${e})`),r.setAttribute("class","dial-tick"),n.append(r)}}function Ma(n,t){let e=[];if(n.status==="waiting"){let r=[...t].sort((i,s)=>+(s===n.runway)-+(i===n.runway));for(let i of r){e.push({label:`Line up ${i}`,text:`W ${i}`},{label:`Take off ${i}`,text:`T ${i}`});let s=I(M.scenario.airport,i);for(let a of s?.intersections??[])a.remainingM>=ft(n)&&e.push({label:`Take off ${i} at ${a.name}`,text:`T ${i} ${a.name}`})}}else n.status==="lineup"&&e.push({label:`Take off ${n.runway}${n.fromIntersection?` at ${n.fromIntersection}`:""}`,text:"T"});if(!n.isArrival&&n.exitFix&&(n.route[0]!==n.exitFix&&e.push({label:`Direct ${n.exitFix}`,text:`C ${n.exitFix}`}),n.targetAltitude<n.exitAltitude&&e.push({label:`Climb ${n.exitAltitude/1e3}k`,text:`C ${n.exitAltitude/1e3}`})),n.isArrival&&n.status==="airborne"){if(n.lateralMode!=="approach"&&n.lateralMode!=="localizer"){let r=M.scenario.options?.requireLandingClearance===!0;for(let i of t)r&&e.push({label:`Intercept ${i}`,text:`I ${i}`}),e.push({label:`Land ${i}`,text:`L ${i}`})}else!n.landingCleared&&n.runway&&e.push({label:`Land ${n.runway}`,text:`L ${n.runway}`}),e.push({label:"Go around",text:"A"});n.targetAltitude>3e3&&e.push({label:"Descend 3k",text:"C 3"}),n.targetSpeed>210&&e.push({label:"Speed 210",text:"S 210"})}return n.status==="airborne"&&n.lateralMode!=="hold"&&n.lateralMode!=="localizer"&&e.push({label:"Hold here",text:"H"}),e}function Ra(n,t){let e=n&&T.quickButtons?Ma(n,t):[],r=(n?n.callsign:"")+"|"+e.map(s=>s.text).join("|");if(r===Ot)return;if(Ot=r,Qt.replaceChildren(),!n||!T.quickButtons){Qt.hidden=!0;return}Qt.hidden=!1;let i=document.createElement("span");i.className="quick-cs",i.textContent=n.callsign,Qt.append(i);for(let s of e){let a=document.createElement("button");a.type="button",a.textContent=s.label,a.title=`${n.callsign} ${s.text}`,a.addEventListener("click",()=>{Si(`${n.callsign} ${s.text}`),V.focus()}),Qt.append(a)}}var $a=60;function D(n,t="info"){let e=document.createElement("li");e.className=t;let r=document.createElement("time");for(r.textContent=ne(M.getState().time).slice(3),e.append(r,document.createTextNode(" "+n)),_e.prepend(e);_e.childElementCount>$a;)_e.lastElementChild?.remove()}function vi(n){for(let t of n)switch(t.type){case"spawned":t.isArrival?D(`${t.callsign} entering from the ${t.where}`):D(`${t.callsign} ready for departure, runway ${t.where}`);break;case"tookOff":D(`${t.callsign} airborne from ${t.runway}`,"ok");break;case"localizerCaptured":{let e=M.getState().aircraft.find(r=>r.callsign===t.callsign);if(e&&!e.landingCleared){let r=M.scenario.options?.landingClearanceNm??kt;D(`${t.callsign} established on final ${t.runway}, needs landing clearance by ${r} nm`,"warn")}else D(`${t.callsign} established on final ${t.runway}`,"ok");break}case"touchdown":D(`${t.callsign} touched down runway ${t.runway}`);break;case"landed":D(`${t.callsign} stopped on runway ${t.runway}, landing complete`,"ok"),Le();break;case"departed":D(`${t.callsign} left via ${t.fix}, handed off`,"ok"),Le();break;case"wrongExit":D(`${t.callsign} ${t.reason}`,"bad"),Le();break;case"missedApproach":D(`${t.callsign} going around from ${t.runway}: ${t.reason}`,"warn"),T.pauseOnGoAround&&gi(`${t.callsign} go-around`);break;case"leftAirspace":D(`${t.callsign} left the airspace`,"bad"),Le();break;case"separationLoss":D(`Separation lost: ${t.a} and ${t.b}, ${t.distance.toFixed(1)} nm, ${Math.round(t.verticalFt)} ft`,"bad"),T.sound&&fn("loss"),T.pauseOnLoss&&gi("separation loss");break;case"conflictWarning":if(!T.conflictAlerts)break;D(`Conflict alert: ${t.a} and ${t.b}, about ${t.inSeconds} s`,"warn"),T.sound&&fn("warning");break;case"runwaysChanged":D(`Wind shift: runways in use now ${t.inUse.join(", ")||"none"}`,"warn");break;case"commandAccepted":D(t.message,"ok");break;case"commandRejected":D(t.message,"bad");break}}function gi(n){Ht!==0&&(Bt(0),D(`Paused: ${n}. Press a speed button to continue.`,"warn"))}function Le(){st!==null&&!M.getState().aircraft.some(n=>n.id===st)&&Ut(null)}function Ut(n){st=n;let t=M.getState().aircraft.find(e=>e.id===n);V.value=t?t.callsign+" ":"",V.focus(),Ot="",ee=0}Ft.addEventListener("pointerdown",n=>{Ut(ht.pick(n.clientX,n.clientY)),n.preventDefault()});Ft.addEventListener("pointermove",n=>{Ft.style.cursor=ht.isOverAircraft(n.clientX,n.clientY)?"pointer":"crosshair"});function Si(n){let t=Qe(n);if(!t.ok){D(t.error,"bad");return}let e=t.commands;for(let r of e)M.command(r);vi(M.drainEvents()),ee=0}fa.addEventListener("submit",n=>{n.preventDefault();let t=V.value.trim();if(!t)return;let e=t.split(/\s+/)[0],r=M.getState().aircraft.find(a=>a.id===st);!Mr(e)&&r&&(t=`${r.callsign} ${t}`),Si(t);let i=Qe(t),s=i.ok?M.getState().aircraft.find(a=>a.callsign===i.callsign):r;s&&(st=s.id),V.value=s?s.callsign+" ":""});V.addEventListener("keydown",n=>{n.key==="Escape"&&Ut(null)});document.addEventListener("keydown",n=>{let t=n.target;if(!(t===V||t.tagName==="SELECT"||t.tagName==="INPUT"||n.ctrlKey||n.metaKey||n.altKey)){if(re!=="approach"){n.key.length===1&&He.focus();return}n.key==="Escape"?Ut(null):n.key.length===1&&V.focus()}});var re="approach",Gt=!1,ct=null,He=x("g-command"),Wt=x("leave-dialog");function Ca(n){re=n,x("atc-console").hidden=n!=="approach",x("ground-console").hidden=n!=="ground"}function La(){return ct??(ct=new Ee({canvas:x("g-radar"),actions:x("g-actions"),form:x("g-form"),input:He,newGame:x("g-new"),clock:x("g-clock"),rate:x("g-rate"),wind:x("g-wind"),runway:x("g-runway"),speedButtons:Array.from(document.querySelectorAll("[data-gspeed]")),stats:x("g-stats"),departures:x("g-departures"),arrivals:x("g-arrivals"),depCount:x("g-dep-count"),arrCount:x("g-arr-count"),log:x("g-log"),windArrow:x("g-wind-arrow"),dialTicks:x("g-dial-ticks"),helpers:()=>T.quickButtons})),ct}function mi(n,t){T=n.settings,Q=n.map,it=n.traffic,wn.hide(),Gt=!0;try{history.pushState({atcSession:!0},"",location.href)}catch{}if(Ca(n.mode),Na(n),n.mode==="ground"){Bt(0);let e=La();e.refresh(),e.start(n.traffic),e.activate(),He.focus()}else ct?.deactivate(),t||(rt=yi??xn()),yi=null,Ot="",te=Me(T),Ti(t),ht.resize(),V.focus()}function Na(n){let t=Re({traffic:n.traffic,settings:n.settings}),e=t==="custom"?"Custom":Z.find(a=>a.id===t)?.label??"",r=Ct(n.traffic).label,i=`${n.mode==="ground"?"Ground":"Approach"} \xB7 ${e} \xB7 ${r} traffic`,s=n.map.label;for(let a of["","g-"])x(`${a}session-airport`).textContent=s,x(`${a}session-meta`).textContent=i}function Ai(){if(Gt){Gt=!1,Bt(0),ct?.pause(),ct?.deactivate(),x("atc-console").hidden=!0,x("ground-console").hidden=!0,Wt.open&&Wt.close();try{history.replaceState(null,"",location.pathname)}catch{}wn.show()}}function ki(){Gt&&(Bt(0),ct?.pause(),x("leave-save").hidden=re!=="approach",Wt.open||Wt.showModal())}for(let n of["menu-btn","g-menu-btn"])x(n).addEventListener("click",ki);x("leave-cancel").addEventListener("click",()=>Wt.close());x("leave-go").addEventListener("click",Ai);x("leave-save").addEventListener("click",()=>{Ei(),Ai()});Wt.addEventListener("close",()=>(re==="approach"?V:He).focus());window.addEventListener("popstate",()=>{if(Gt){try{history.pushState({atcSession:!0},"",location.href)}catch{}ki()}});function Bt(n){Ht=n,Pt=0;for(let t of bi)t.setAttribute("aria-pressed",String(t.dataset.speed===String(n)))}for(let n of bi)n.addEventListener("click",()=>{let t=n.dataset.speed==="max"?"max":Number(n.dataset.speed);Bt(t),V.focus()});x("new-game").addEventListener("click",()=>{rt=xn(),it==="custom"&&(it="normal"),Ti()});var bn=x("settings-dialog");si(bn,()=>T,n=>{T=n,Ot="",ht.setDisplay(Te(T)),te=Me(T),te===0&&bt.clear(),ct?.refresh()});for(let n of["settings","g-settings"])x(n).addEventListener("click",()=>{bn.dispatchEvent(new Event("settings-open")),bn.showModal()});x("save").addEventListener("click",Ei);function Ei(){let n=Ar(M,Q.id),t=new Blob([JSON.stringify(n,null,2)],{type:"application/json"}),e=document.createElement("a");e.href=URL.createObjectURL(t),e.download=`atc-${Q.id}-${rt}-${ne(M.getState().time).replace(/:/g,"")}.json`,document.body.append(e),e.click(),e.remove(),setTimeout(()=>URL.revokeObjectURL(e.href),5e3),D(`Session saved (${n.commands.length} commands at ${ne(M.getState().time)}).`,"ok")}function Ti(n){if(n){Q=z(n.map),rt=n.seed,Ne=n.traffic,Ie=n.weather,De=n.options;let r=$t.find(i=>JSON.stringify(i.profile)===JSON.stringify(n.traffic));it=r?r.id:"custom",M=kr(n)}else Ne=un(Ct(it).profile,T),Ie=cn(T),De=hn(T),M=new nt(Kt(rt,Q.id,Ne,Ie,De));ht=new gt(Ft,Q.airport,Te(T)),st=null,Pe.clear(),bt.clear(),xi.clear(),_e.innerHTML="",yn="",Ot="",ya.textContent=String(rt);try{let r=it==="custom"?"":`&traffic=${it}`;history.replaceState(null,"",`?map=${Q.id}&seed=${rt}${r}`)}catch{}let t=M.getState().wind,e=n?`Loaded ${n.note?`"${n.note}"`:"session"} at ${ne(M.getState().time)}${n.tick>0?", paused":""}.`:`${Q.airport.city}, ${Ct(it).label.toLowerCase()} traffic, seed ${rt}.`;D(`${e} Wind ${String(Math.round(t.direction)).padStart(3,"0")}\xB0 ${Math.round(t.speed)} kt, runways in use ${M.getState().runwaysInUse.join(", ")}.`),Bt(n&&n.tick>0?0:1),ee=0,Ut(null)}function xn(){return Math.floor(Math.random()*1e6)+1}function Ia(){try{return new URLSearchParams(location.search)}catch{return new URLSearchParams}}new ResizeObserver(()=>ht.resize()).observe(Ft);var yi=Number(xt.get("seed"))||null,wn=new Ce({settings:()=>T,onSettings:n=>{T=n},onStart:n=>mi(n),onLoad:async n=>{let t=Er(await n.text());if(!t.ok)return`Could not load ${n.name}: ${t.error}`;let e=$t.find(r=>JSON.stringify(r.profile)===JSON.stringify(t.file.traffic));return mi({map:z(t.file.map),mode:"approach",traffic:e?.id??"normal",settings:T},t.file),e||(x("session-meta").textContent="Approach \xB7 Loaded from file"),null},initial:{map:xt.get("map"),mode:xt.get("mode"),traffic:xt.get("traffic")}});requestAnimationFrame(wi);wn.show();})();
+</script>
   </body>
 </html>

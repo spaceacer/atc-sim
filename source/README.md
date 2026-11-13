@@ -6,7 +6,7 @@ Two modes: **Approach radar** (vector, sequence and clear arrivals and
 departures) and **Ground** (push back, taxi and hold aircraft on a practice
 airport while the tower and the airborne traffic run automatically).
 
-**Version 0.7.1.** The project follows Semantic Versioning (`MAJOR.MINOR.PATCH`);
+**Version 0.8.0.** The project follows Semantic Versioning (`MAJOR.MINOR.PATCH`);
 what changed in each release is in [CHANGELOG.md](CHANGELOG.md).
 
 In the approach mode, arrivals enter from any edge of a rectangular airspace at
@@ -21,8 +21,15 @@ and a single-runway practice field.
 
 ## Play
 
-**No install:** double-click `ATC-Sim-0.7.1.html`. Everything is inside that one file.
-Switch between **Approach radar** and **Ground** at the top of the panel.
+**No install:** play at <https://spaceacer.github.io/atc-sim/>, or double-click
+`ATC-Sim-0.8.0.html` (everything is inside that one file).
+
+The game opens on the **main menu**: pick the airport, the position
+(**Approach radar** or **Ground**, where the airport offers it) and the
+difficulty, then **Start session**. Airport, position and difficulty are fixed
+for the session; **Menu** in the panel (or the browser's Back button) pauses
+and offers to save before returning to the menu. **Restart** keeps the same
+choices with new traffic.
 
 **From source:**
 
@@ -109,20 +116,31 @@ Scoring: landing +10 (when the aircraft stops), good departure +10, separation
 loss -20 (per pair, when it starts), go-around -5, departure leaving wrongly
 -10, arrival leaving the airspace -10. Values live in `src/engine/rules/scoring.ts`.
 
-## Settings (approach radar)
+## Difficulty and settings
 
-**Settings** (the gear button, in both modes) opens four groups. Display and assistance apply at
-once; traffic, weather and rules apply from the next session (the dialog can
-start one) and are saved in session files, so replays stay exact. Settings
-are remembered in the browser when it allows storage.
+**Difficulty** on the main menu is a preset for the session's controls, all of
+which stay visible and editable; changing any of them makes it **Custom**.
+
+| Control | Training | Standard | Expert |
+| --- | --- | --- | --- |
+| Traffic level | Light | Normal | Busy |
+| Wind | Light, steady | Moderate, shifting | Strong, shifting |
+| Turboprops, heavies | Fewer | Normal | More |
+| Separation | 3 nm / 1,000 ft | 3 nm / 1,000 ft | 3 nm / 1,000 ft |
+| Landing clearance | With approach | With approach | Separate, by 4 nm |
+| Conflict alerts | On | On | On |
+| Pause on separation loss | On | Off | Off |
+| Helper buttons | On | On | On |
+
+Arrivals and departures can also be set above or below the traffic level. In
+the ground mode only the traffic level and helper buttons apply. Traffic,
+weather and rules are saved in session files, so replays stay exact. All
+choices are remembered in the browser when it allows storage.
+
+**Settings** (the gear button, in both modes) holds what applies at once:
 
 - **Scope display:** label size, history trail (off, 24 s, 60 s), leader line
   (off, 30 s, 60 s, 2 min), range rings every 10 nm, fix names.
-- **Traffic and weather:** more or fewer arrivals and departures than the
-  traffic level, the share of turboprops and of heavies (none, fewer, normal,
-  more), wind shifting or fixed, wind strength (calm, light, moderate, strong).
-- **Rules:** lateral separation 3 or 5 nm, vertical 1,000 or 2,000 ft,
-  separate landing clearance and its distance.
 - **Assistance:** conflict alerts on or off, pause on a separation loss or a
   go-around, sound alerts, and **helper buttons** (both modes): turn them off
   to type every instruction yourself (ground mode keeps the button for
@@ -225,12 +243,11 @@ EUROCONTROL Aircraft Performance Database as mirrored by SKYbrary
 ## Sessions and scenarios
 
 **Save session** downloads a JSON file with the map, seed, traffic, weather and
-every command with its tick. **Load session or scenario** replays it to the
-saved moment (paused), reproducing the exact state. A scenario file is the same
-format with no commands; examples are in `scenarios/`. The Traffic menu sets
-Light, Normal or Busy traffic. Files record the simulator version that saved them
+every command with its tick. **Load saved session or scenario** (main menu) replays it
+to the saved moment (paused), reproducing the exact state. A scenario file is the same
+format with no commands; examples are in `scenarios/`. Files record the simulator version that saved them
 (`appVersion`). Saving does not work inside the hosted claude.ai
-page (downloads are blocked there); use `ATC-Sim-0.7.1.html` or `npm run dev`.
+page (downloads are blocked there); use `ATC-Sim-0.8.0.html` or `npm run dev`.
 
 ## Python and AI training
 

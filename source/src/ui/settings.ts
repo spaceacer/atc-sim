@@ -1,7 +1,7 @@
-// Settings dialog for the ATC mode: scope display, traffic and weather, rules,
-// assistance. Display and assistance apply at once; traffic, weather and rules
-// change the scenario, so they apply from the next session (and are recorded
-// in saved session files, so replays stay exact).
+// Settings shared by the main menu and the in-game dialog. Traffic, weather
+// and rules define a session, so they are chosen on the main menu (and
+// recorded in saved session files, so replays stay exact). The in-game dialog
+// only holds what applies at once: scope display and assistance.
 //
 // Stored per browser in localStorage when available; the game works without it.
 
@@ -68,6 +68,8 @@ interface Field {
 interface Group {
   title: string;
   when: string;
+  /** Shown in the in-game dialog (the rest is set on the main menu). */
+  inGame: boolean;
   fields: Field[];
 }
 
@@ -78,6 +80,7 @@ const GROUPS: readonly Group[] = [
   {
     title: 'Scope display',
     when: 'Applies now.',
+    inGame: true,
     fields: [
       { key: 'labelSize', label: 'Label size', choices: [['small', 'Small'], ['normal', 'Normal'], ['large', 'Large']] },
       { key: 'trail', label: 'History trail', choices: [['off', 'Off'], ['short', 'Short (24 s)'], ['long', 'Long (60 s)']] },
@@ -89,6 +92,7 @@ const GROUPS: readonly Group[] = [
   {
     title: 'Traffic and weather',
     when: 'Applies from the next session.',
+    inGame: false,
     fields: [
       { key: 'arrivals', label: 'Arrivals', choices: RATES },
       { key: 'departures', label: 'Departures', choices: RATES },
@@ -101,6 +105,7 @@ const GROUPS: readonly Group[] = [
   {
     title: 'Rules',
     when: 'Applies from the next session.',
+    inGame: false,
     fields: [
       { key: 'lateralNm', label: 'Lateral separation', choices: [['3', '3 nm'], ['5', '5 nm']] },
       { key: 'verticalFt', label: 'Vertical separation', choices: [['1000', '1,000 ft'], ['2000', '2,000 ft']] },
@@ -115,6 +120,7 @@ const GROUPS: readonly Group[] = [
   {
     title: 'Assistance',
     when: 'Applies now.',
+    inGame: true,
     fields: [
       { key: 'conflictAlerts', label: 'Conflict alerts (orange)' },
       { key: 'pauseOnLoss', label: 'Pause on a separation loss' },
@@ -141,7 +147,7 @@ export function loadSettings(): Settings {
   return { ...DEFAULT_SETTINGS };
 }
 
-function saveSettings(s: Settings): void {
+export function saveSettings(s: Settings): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
   } catch {
@@ -224,7 +230,7 @@ export function trailLengthFor(s: Settings): number {
 export function buildSettingsDialog(
   dialog: HTMLDialogElement,
   get: () => Settings,
-  onSave: (s: Settings, restart: boolean) => void,
+  onSave: (s: Settings) => void,
 ): void {
   dialog.replaceChildren();
   const form = document.createElement('form');
@@ -237,7 +243,7 @@ export function buildSettingsDialog(
   h.textContent = 'Settings';
   const note = document.createElement('p');
   note.className = 'settings-note';
-  note.textContent = 'These set up the approach radar; helper buttons apply to the ground mode too.';
+  note.textContent = 'Apply at once. Airport, traffic, weather and rules are chosen on the main menu.';
   const close = button('Close', 'ghost');
   close.addEventListener('click', () => dialog.close());
   head.append(h, close);
@@ -245,13 +251,10 @@ export function buildSettingsDialog(
 
   const inputs = new Map<Key, HTMLInputElement | HTMLSelectElement>();
   for (const g of GROUPS) {
+    if (!g.inGame) continue;
     const fs = document.createElement('fieldset');
     const legend = document.createElement('legend');
     legend.textContent = g.title;
-    const when = document.createElement('span');
-    when.className = 'settings-when';
-    when.textContent = g.when;
-    legend.append(' ', when);
     fs.append(legend);
     for (const f of g.fields) {
       const row = document.createElement('label');
@@ -285,9 +288,8 @@ export function buildSettingsDialog(
   const actions = document.createElement('div');
   actions.className = 'settings-actions';
   const reset = button('Defaults', 'link');
-  const save = button('Save', 'ghost');
-  const restart = button('Save and start a new session', 'primary');
-  actions.append(reset, save, restart);
+  const save = button('Save', 'primary');
+  actions.append(reset, save);
   form.append(actions);
   dialog.append(form);
 
@@ -308,21 +310,22 @@ export function buildSettingsDialog(
     }
   };
 
-  reset.addEventListener('click', () => write(DEFAULT_SETTINGS));
+  // Defaults for the fields shown here only; the session's choices stay.
+  reset.addEventListener('click', () => write({ ...read(), ...pick(DEFAULT_SETTINGS, [...inputs.keys()]) }));
   save.addEventListener('click', () => {
     const s = read();
     saveSettings(s);
-    onSave(s, false);
-    dialog.close();
-  });
-  restart.addEventListener('click', () => {
-    const s = read();
-    saveSettings(s);
-    onSave(s, true);
+    onSave(s);
     dialog.close();
   });
   // Fill with the current settings whenever the dialog opens.
   dialog.addEventListener('settings-open', () => write(get()));
+}
+
+function pick(s: Settings, keys: Key[]): Partial<Settings> {
+  const out: Record<string, unknown> = {};
+  for (const k of keys) out[k] = s[k];
+  return out as Partial<Settings>;
 }
 
 function button(text: string, cls: string): HTMLButtonElement {

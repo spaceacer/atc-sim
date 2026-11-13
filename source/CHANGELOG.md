@@ -9,6 +9,28 @@ While the major version is 0, a minor release may also change behaviour that
 saved sessions or trained agents rely on; such changes are listed under
 **Changed**.
 
+## 0.8.0 - 2026-11-13
+
+### Added
+- Main menu, the first screen: choose the airport, the position (approach
+  radar or ground, where the airport offers it) and the difficulty, with a
+  static map of the airport's runways and fixes, then start or load a session.
+- Difficulty presets Training, Standard and Expert, plus Custom. A preset only
+  sets the same controls the player can edit; editing any makes it Custom.
+  Training also turns on pause on a separation loss.
+- How to play overlay with the commands and scoring for both modes.
+- Menu button in both panels: pauses and asks before leaving, with an option
+  to save first. The browser's Back button asks the same.
+
+### Changed
+- Airport, position, traffic, weather and rules are chosen on the main menu
+  and fixed for the session. The mode switch, map and traffic pickers and
+  Load are gone from the panel; Restart keeps the choices with new traffic.
+- The in-game Settings dialog holds only scope display and assistance, which
+  apply at once.
+- Links with `?map=...&seed=...&traffic=...` preselect the menu and use that
+  seed for the first session.
+
 ## 0.7.1 - 2026-11-12
 
 ### Fixed

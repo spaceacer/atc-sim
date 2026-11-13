@@ -9,4 +9,4 @@ from .env import AtcEnv, AtcVecEnv
 from .spaces import HAVE_GYMNASIUM
 
 __all__ = ["AtcEnv", "AtcVecEnv", "BaselineController", "Bridge", "BridgeError", "HAVE_GYMNASIUM"]
-__version__ = "0.7.1"
+__version__ = "0.8.0"

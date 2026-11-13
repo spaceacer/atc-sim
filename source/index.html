@@ -3,8 +3,8 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="version" content="0.7.1" />
-    <title>ATC Simulator 0.7.1</title>
+    <meta name="version" content="0.8.0" />
+    <title>ATC Simulator 0.8.0</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -14,7 +14,59 @@
     <link rel="stylesheet" href="./src/ui/style.css" />
   </head>
   <body>
-    <main class="console" id="atc-console">
+    <section id="menu" class="menu" aria-label="Main menu">
+      <header class="menu-top">
+        <div class="wordmark">
+          <span class="wordmark-dot" aria-hidden="true"></span>
+          <h1>ATC Simulator</h1>
+          <span class="wordmark-version">v<span id="menu-version">0.8.0</span></span>
+        </div>
+        <button id="menu-help" type="button" class="m-link">How to play</button>
+      </header>
+
+      <div class="menu-body">
+        <section class="m-col m-airports" aria-labelledby="m-airport-h">
+          <h2 id="m-airport-h" class="m-h"><span>1</span> Airport</h2>
+          <div id="menu-airports" class="airport-list" role="radiogroup" aria-labelledby="m-airport-h"></div>
+          <h2 class="m-h"><span>2</span> Position</h2>
+          <div class="m-seg m-mode" role="group" aria-label="Position">
+            <button type="button" data-menu-mode="approach" aria-pressed="true">Approach radar</button>
+            <button type="button" data-menu-mode="ground" aria-pressed="false">Ground</button>
+          </div>
+          <p id="menu-mode-note" class="m-note"></p>
+        </section>
+
+        <section class="m-preview" aria-label="Airport map">
+          <div class="preview-id">
+            <div id="preview-icao" class="preview-icao">VABB</div>
+            <div>
+              <div id="preview-name" class="preview-name"></div>
+              <div id="preview-facts" class="preview-facts"></div>
+            </div>
+          </div>
+          <div class="preview-map"><canvas id="menu-preview"></canvas></div>
+        </section>
+
+        <section class="m-col m-setup" aria-labelledby="m-diff-h">
+          <h2 id="m-diff-h" class="m-h"><span>3</span> Difficulty</h2>
+          <div id="menu-difficulty" class="m-seg m-diff" role="group" aria-labelledby="m-diff-h"></div>
+          <p id="menu-difficulty-note" class="m-note"></p>
+          <div id="menu-controls" class="m-controls"></div>
+        </section>
+      </div>
+
+      <footer class="menu-bottom">
+        <div class="menu-files">
+          <button id="menu-load" type="button" class="m-link">Load saved session or scenario</button>
+          <input id="menu-load-file" type="file" accept=".json,application/json" hidden />
+          <span id="menu-error" class="menu-error" role="alert"></span>
+        </div>
+        <div id="menu-summary" class="menu-summary"></div>
+        <button id="menu-start" type="button" class="m-start">Start session</button>
+      </footer>
+    </section>
+
+    <main class="console" id="atc-console" hidden>
       <section class="scope" aria-label="Radar">
         <div class="view">
           <canvas id="radar"></canvas>
@@ -29,25 +81,16 @@
       </section>
 
       <aside class="panel">
-        <div class="modebar" role="group" aria-label="Mode">
-          <button type="button" data-mode="approach" aria-pressed="true">Approach radar</button>
-          <button type="button" data-mode="ground" aria-pressed="false">Ground</button>
-        </div>
         <header class="session">
-          <label class="pick">
-            <span>Map</span>
-            <select id="map"></select>
-          </label>
-          <label class="pick traffic-pick">
-            <span>Traffic</span>
-            <select id="traffic-level"></select>
-          </label>
-          <button id="new-game" type="button" class="ghost">New session</button>
+          <button id="menu-btn" type="button" class="menu-btn" aria-label="Main menu">&#8592; Menu</button>
+          <div class="session-info">
+            <div id="session-airport" class="session-airport">--</div>
+            <div id="session-meta" class="session-meta">--</div>
+          </div>
         </header>
         <div class="files">
           <button id="save" type="button" class="link">Save session</button>
-          <button id="load" type="button" class="link">Load session or scenario</button>
-          <input id="load-file" type="file" accept=".json,application/json" hidden />
+          <button id="new-game" type="button" class="link" title="Same airport and settings, new traffic">Restart</button>
           <button id="settings" type="button" class="settings-btn" aria-label="Settings">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.6 7.6 0 0 0 0 2l-2.2 1.6 2 3.5 2.5-1a7.4 7.4 0 0 0 1.7 1l.4 2.6h4l.4-2.6a7.4 7.4 0 0 0 1.7-1l2.5 1 2-3.5zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)"/></svg>
             Settings
@@ -126,7 +169,7 @@
             than 5 kt of tailwind and a runway closes. Session seed <span id="seed"></span>.
           </p>
         </details>
-        <p class="version">ATC Simulator <span id="version">0.7.1</span></p>
+        <p class="version">ATC Simulator <span id="version">0.8.0</span></p>
       </aside>
     </main>
 
@@ -144,22 +187,15 @@
       </section>
 
       <aside class="panel">
-        <div class="modebar" role="group" aria-label="Mode">
-          <button type="button" data-mode="approach" aria-pressed="false">Approach radar</button>
-          <button type="button" data-mode="ground" aria-pressed="true">Ground</button>
-        </div>
         <header class="session">
-          <label class="pick">
-            <span>Airport</span>
-            <select disabled><option>Practice field</option></select>
-          </label>
-          <label class="pick traffic-pick">
-            <span>Traffic</span>
-            <select id="g-traffic"></select>
-          </label>
-          <button id="g-new" type="button" class="ghost">New session</button>
+          <button id="g-menu-btn" type="button" class="menu-btn" aria-label="Main menu">&#8592; Menu</button>
+          <div class="session-info">
+            <div id="g-session-airport" class="session-airport">--</div>
+            <div id="g-session-meta" class="session-meta">--</div>
+          </div>
         </header>
         <div class="files">
+          <button id="g-new" type="button" class="link" title="Same airport and settings, new traffic">Restart</button>
           <button id="g-settings" type="button" class="settings-btn" aria-label="Settings">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.6 7.6 0 0 0 0 2l-2.2 1.6 2 3.5 2.5-1a7.4 7.4 0 0 0 1.7 1l.4 2.6h4l.4-2.6a7.4 7.4 0 0 0 1.7-1l2.5 1 2-3.5zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)"/></svg>
             Settings
@@ -231,11 +267,61 @@
             cargo stands are south of the runway, so cargo traffic has to cross it.
           </p>
         </details>
-        <p class="version">ATC Simulator <span class="version-number">0.7.1</span></p>
+        <p class="version">ATC Simulator <span class="version-number">0.8.0</span></p>
       </aside>
     </main>
     <!-- Shared by both modes, so it lives outside the consoles. -->
     <dialog id="settings-dialog" class="settings" aria-label="Settings"></dialog>
+
+    <dialog id="leave-dialog" class="settings leave" aria-labelledby="leave-h">
+      <h2 id="leave-h">Return to the main menu?</h2>
+      <p>This session ends. To change the airport, position or difficulty, start a new one from the menu.</p>
+      <div class="settings-actions">
+        <button id="leave-cancel" type="button" class="link">Keep playing</button>
+        <button id="leave-save" type="button" class="ghost">Save, then leave</button>
+        <button id="leave-go" type="button" class="primary">Leave session</button>
+      </div>
+    </dialog>
+
+    <dialog id="help-dialog" class="settings help-dialog" aria-labelledby="help-h">
+      <div class="settings-head">
+        <h2 id="help-h">How to play</h2>
+        <button id="help-close" type="button" class="ghost">Close</button>
+      </div>
+      <div class="help-cols">
+        <section>
+          <h3>Approach radar</h3>
+          <p>Click an aircraft (blip, label or strip), then use the buttons over the scope or type. Chain clauses: <code>IGO451 C PUNE C 11 T</code>.</p>
+          <table>
+            <tr><td><code>C 240</code></td><td>Turn to heading 240</td></tr>
+            <tr><td><code>C 3</code></td><td>Climb or descend to 3,000 ft</td></tr>
+            <tr><td><code>C PUNE</code></td><td>Direct to a fix</td></tr>
+            <tr><td><code>S 210</code></td><td>Speed 210 kt</td></tr>
+            <tr><td><code>I 27</code> / <code>L 27</code></td><td>Intercept / cleared to land runway 27</td></tr>
+            <tr><td><code>W</code> / <code>T</code></td><td>Line up and wait / cleared for takeoff</td></tr>
+            <tr><td><code>H</code> / <code>A</code></td><td>Hold / go around</td></tr>
+          </table>
+          <p>Keep aircraft 3 nm or 1,000 ft apart. Orange: a conflict is predicted within a minute. Red: separation is lost.</p>
+        </section>
+        <section>
+          <h3>Ground</h3>
+          <p>Push departures back and taxi them to the runway; taxi arrivals to their stand. The tower and the air are automatic.</p>
+          <table>
+            <tr><td><code>PUSH E</code></td><td>Push back, ending up facing east</td></tr>
+            <tr><td><code>TAXI A5</code></td><td>Taxi to holding point A5 (<code>VIA A</code> to choose the route)</td></tr>
+            <tr><td><code>HOLD</code> / <code>CONT</code></td><td>Hold position / continue</td></tr>
+            <tr><td><code>CROSS</code></td><td>Ask the tower to cross the runway</td></tr>
+          </table>
+          <h3>Scoring</h3>
+          <table>
+            <tr><td>Landing, departure, arrival on stand</td><td>+10</td></tr>
+            <tr><td>Go-around</td><td>-5</td></tr>
+            <tr><td>Leaving the airspace wrongly</td><td>-10</td></tr>
+            <tr><td>Loss of separation, ground conflict</td><td>-20</td></tr>
+          </table>
+        </section>
+      </div>
+    </dialog>
     <script type="module" src="./src/ui/main.ts"></script>
   </body>
 </html>

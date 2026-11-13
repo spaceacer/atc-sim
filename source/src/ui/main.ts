@@ -2,13 +2,15 @@
 // The UI only calls sim.command() / sim.step() and reads sim.getState().
 
 import { Simulation, DT, LANDING_CLEARANCE_NM, findRunway, takeoffRunNeeded, type Aircraft, type Command, type ScenarioOptions, type SimEvent, type TrafficProfile, type WeatherProfile } from '../engine/index.js';
-import { MAPS, TRAFFIC_LEVELS, findMap, findTraffic, makeScenario, type MapInfo } from '../data/scenarios.js';
+import { TRAFFIC_LEVELS, findMap, findTraffic, makeScenario, type MapInfo, type Mode } from '../data/scenarios.js';
 import { parseSession, restoreSession, sessionFromSim, type SessionFile } from '../data/session.js';
 import { parseCommand, isCallsign } from '../commands/parser.js';
 import { Radar, type Prev, type Trail } from './radar.js';
 import { Strips } from './strips.js';
 import { VERSION } from '../version.js';
 import { GroundApp } from './ground/app.js';
+import { Menu, type MenuStart } from './menu.js';
+import { PRESETS, matchPreset } from './presets.js';
 import {
   beep,
   buildSettingsDialog,
@@ -43,9 +45,6 @@ const canvas = $<HTMLCanvasElement>('radar');
 const input = $<HTMLInputElement>('command');
 const form = $<HTMLFormElement>('command-form');
 const quickEl = $('quick');
-const mapSelect = $<HTMLSelectElement>('map');
-const trafficSelect = $<HTMLSelectElement>('traffic-level');
-const loadInput = $<HTMLInputElement>('load-file');
 const clockEl = $('clock');
 const rateEl = $('rate');
 const statsEl = $('stats');
@@ -59,9 +58,6 @@ const windText = $('wind-text');
 const inUseEl = $('runways-in-use');
 const speedButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-speed]'));
 
-for (const m of MAPS) mapSelect.add(new Option(m.label, m.id));
-for (const t of TRAFFIC_LEVELS) trafficSelect.add(new Option(t.label, t.id));
-trafficSelect.add(new Option('From file', 'custom'));
 buildDialTicks();
 
 let sim = new Simulation(makeScenario(seed, map.id, traffic, weather, options));
@@ -69,7 +65,7 @@ let radar = new Radar(canvas, map.airport, radarDisplayFor(settings));
 const strips = new Strips($('arrivals'), $('departures'), $('arr-count'), $('dep-count'), (id) => select(id));
 
 let selectedId: number | null = null;
-let speed: number | 'max' = 1; // 0 = paused
+let speed: number | 'max' = 0; // 0 = paused; the menu shows first
 let accumulator = 0;
 let lastFrame = performance.now();
 let prev = new Map<number, Prev>();
@@ -114,7 +110,7 @@ function frame(now: number): void {
 function tick(now: number): void {
   const realDt = Math.min(0.25, (now - lastFrame) / 1000); // cap after tab switches
   lastFrame = now;
-  if (mode !== 'approach') return; // the ground mode runs its own loop
+  if (mode !== 'approach' || !inSession) return; // the ground mode runs its own loop
 
   let alpha = 1;
   if (speed === 'max') {
@@ -452,67 +448,136 @@ document.addEventListener('keydown', (ev) => {
 });
 
 // ---------------------------------------------------------------------------
-// Mode: approach radar or ground controller
+// Screens: the main menu, then one session in one mode. Airport, mode and
+// difficulty are fixed for the session; changing them means going back.
 
-type Mode = 'approach' | 'ground';
-let mode: Mode = params.get('mode') === 'ground' ? 'ground' : 'approach';
+let mode: Mode = 'approach';
+let inSession = false;
 let groundApp: GroundApp | null = null;
 const groundInput = $<HTMLInputElement>('g-command');
+const leaveDialog = $<HTMLDialogElement>('leave-dialog');
 
-function setMode(next: Mode): void {
+function showConsole(next: Mode): void {
   mode = next;
   $('atc-console').hidden = next !== 'approach';
   $('ground-console').hidden = next !== 'ground';
-  for (const b of document.querySelectorAll<HTMLButtonElement>('[data-mode]')) {
-    b.setAttribute('aria-pressed', String(b.dataset.mode === next));
+}
+
+function ensureGroundApp(): GroundApp {
+  groundApp ??= new GroundApp({
+    canvas: $<HTMLCanvasElement>('g-radar'),
+    actions: $('g-actions'),
+    form: $<HTMLFormElement>('g-form'),
+    input: groundInput,
+    newGame: $('g-new'),
+    clock: $('g-clock'),
+    rate: $('g-rate'),
+    wind: $('g-wind'),
+    runway: $('g-runway'),
+    speedButtons: Array.from(document.querySelectorAll<HTMLButtonElement>('[data-gspeed]')),
+    stats: $('g-stats'),
+    departures: $<HTMLOListElement>('g-departures'),
+    arrivals: $<HTMLOListElement>('g-arrivals'),
+    depCount: $('g-dep-count'),
+    arrCount: $('g-arr-count'),
+    log: $<HTMLOListElement>('g-log'),
+    windArrow: $('g-wind-arrow') as unknown as SVGGElement,
+    dialTicks: $('g-dial-ticks') as unknown as SVGGElement,
+    helpers: () => settings.quickButtons,
+  });
+  return groundApp;
+}
+
+/** Start a session from the menu's choices. */
+function enterSession(choice: MenuStart, file?: SessionFile): void {
+  settings = choice.settings;
+  map = choice.map;
+  trafficId = choice.traffic;
+  menu.hide();
+  inSession = true;
+  try {
+    history.pushState({ atcSession: true }, '', location.href);
+  } catch {
+    // file:// and embedded pages may refuse history changes.
   }
-  if (next === 'ground') {
-    setSpeed(0); // the radar session waits, paused
-    if (!groundApp) {
-      groundApp = new GroundApp({
-        canvas: $<HTMLCanvasElement>('g-radar'),
-        actions: $('g-actions'),
-        form: $<HTMLFormElement>('g-form'),
-        input: groundInput,
-        traffic: $<HTMLSelectElement>('g-traffic'),
-        newGame: $('g-new'),
-        clock: $('g-clock'),
-        rate: $('g-rate'),
-        wind: $('g-wind'),
-        runway: $('g-runway'),
-        speedButtons: Array.from(document.querySelectorAll<HTMLButtonElement>('[data-gspeed]')),
-        stats: $('g-stats'),
-        departures: $<HTMLOListElement>('g-departures'),
-        arrivals: $<HTMLOListElement>('g-arrivals'),
-        depCount: $('g-dep-count'),
-        arrCount: $('g-arr-count'),
-        log: $<HTMLOListElement>('g-log'),
-        windArrow: $('g-wind-arrow') as unknown as SVGGElement,
-        dialTicks: $('g-dial-ticks') as unknown as SVGGElement,
-        helpers: () => settings.quickButtons,
-      });
-      groundApp.start();
-    }
-    groundApp.activate();
+  showConsole(choice.mode);
+  sessionLabel(choice);
+  if (choice.mode === 'ground') {
+    setSpeed(0);
+    const g = ensureGroundApp();
+    g.refresh();
+    g.start(choice.traffic);
+    g.activate();
     groundInput.focus();
   } else {
     groundApp?.deactivate();
+    if (!file) seed = seedFromLink ?? newSeed();
+    seedFromLink = null;
+    lastQuickKey = '';
+    trailLength = trailLengthFor(settings);
+    startGame(file);
     radar.resize();
     input.focus();
   }
-  try {
-    const url = new URL(location.href);
-    if (next === 'ground') url.searchParams.set('mode', 'ground');
-    else url.searchParams.delete('mode');
-    history.replaceState(null, '', url.search || '?');
-  } catch {
-    // file:// and embedded pages may refuse URL changes.
+}
+
+function sessionLabel(choice: MenuStart): void {
+  const d = matchPreset({ traffic: choice.traffic, settings: choice.settings });
+  const diff = d === 'custom' ? 'Custom' : (PRESETS.find((p) => p.id === d)?.label ?? '');
+  const level = findTraffic(choice.traffic).label;
+  const meta = `${choice.mode === 'ground' ? 'Ground' : 'Approach'} · ${diff} · ${level} traffic`;
+  const name = choice.map.label;
+  for (const p of ['', 'g-']) {
+    $(`${p}session-airport`).textContent = name;
+    $(`${p}session-meta`).textContent = meta;
   }
 }
 
-for (const b of document.querySelectorAll<HTMLButtonElement>('[data-mode]')) {
-  b.addEventListener('click', () => setMode(b.dataset.mode === 'ground' ? 'ground' : 'approach'));
+function leaveSession(): void {
+  if (!inSession) return;
+  inSession = false;
+  setSpeed(0);
+  groundApp?.pause();
+  groundApp?.deactivate();
+  $('atc-console').hidden = true;
+  $('ground-console').hidden = true;
+  if (leaveDialog.open) leaveDialog.close();
+  try {
+    history.replaceState(null, '', location.pathname);
+  } catch {
+    // ignore
+  }
+  menu.show();
 }
+
+/** Menu button or browser Back during a session: pause and ask first. */
+function askLeave(): void {
+  if (!inSession) return;
+  setSpeed(0);
+  groundApp?.pause();
+  $('leave-save').hidden = mode !== 'approach'; // ground sessions cannot be saved yet
+  if (!leaveDialog.open) leaveDialog.showModal();
+}
+
+for (const id of ['menu-btn', 'g-menu-btn']) $(id).addEventListener('click', askLeave);
+$('leave-cancel').addEventListener('click', () => leaveDialog.close());
+$('leave-go').addEventListener('click', leaveSession);
+$('leave-save').addEventListener('click', () => {
+  saveSession();
+  leaveSession();
+});
+leaveDialog.addEventListener('close', () => (mode === 'approach' ? input : groundInput).focus());
+
+window.addEventListener('popstate', () => {
+  if (!inSession) return;
+  // Stay in the session (Back would otherwise leave the page state behind) and ask.
+  try {
+    history.pushState({ atcSession: true }, '', location.href);
+  } catch {
+    // ignore
+  }
+  askLeave();
+});
 
 function setSpeed(value: number | 'max'): void {
   speed = value;
@@ -530,19 +595,7 @@ for (const b of speedButtons) {
 
 $('new-game').addEventListener('click', () => {
   seed = newSeed();
-  startGame();
-});
-
-mapSelect.addEventListener('change', () => {
-  map = findMap(mapSelect.value);
-  seed = newSeed();
-  startGame();
-});
-
-trafficSelect.addEventListener('change', () => {
-  if (trafficSelect.value === 'custom') return;
-  trafficId = trafficSelect.value;
-  seed = newSeed();
+  if (trafficId === 'custom') trafficId = 'normal';
   startGame();
 });
 
@@ -550,22 +603,13 @@ const settingsDialog = $<HTMLDialogElement>('settings-dialog');
 buildSettingsDialog(
   settingsDialog,
   () => settings,
-  (next, restart) => {
+  (next) => {
     settings = next;
     lastQuickKey = '';
     radar.setDisplay(radarDisplayFor(settings));
     trailLength = trailLengthFor(settings);
     if (trailLength === 0) trails.clear();
     groundApp?.refresh();
-    if (restart && mode === 'ground') {
-      groundApp?.start();
-    } else if (restart) {
-      seed = newSeed();
-      if (trafficId === 'custom') trafficId = 'normal';
-      startGame();
-    } else {
-      log('Settings saved. Traffic, weather and rules apply from the next session.', 'ok');
-    }
   },
 );
 for (const id of ['settings', 'g-settings']) {
@@ -575,7 +619,9 @@ for (const id of ['settings', 'g-settings']) {
   });
 }
 
-$('save').addEventListener('click', () => {
+$('save').addEventListener('click', saveSession);
+
+function saveSession(): void {
   const file = sessionFromSim(sim, map.id);
   const blob = new Blob([JSON.stringify(file, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
@@ -586,21 +632,7 @@ $('save').addEventListener('click', () => {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
   log(`Session saved (${file.commands.length} commands at ${formatTime(sim.getState().time)}).`, 'ok');
-});
-
-$('load').addEventListener('click', () => loadInput.click());
-
-loadInput.addEventListener('change', async () => {
-  const f = loadInput.files?.[0];
-  loadInput.value = '';
-  if (!f) return;
-  const parsed = parseSession(await f.text());
-  if (!parsed.ok) {
-    log(`Could not load ${f.name}: ${parsed.error}`, 'bad');
-    return;
-  }
-  startGame(parsed.file);
-});
+}
 
 function startGame(file?: SessionFile): void {
   if (file) {
@@ -620,8 +652,6 @@ function startGame(file?: SessionFile): void {
     sim = new Simulation(makeScenario(seed, map.id, traffic, weather, options));
   }
   radar = new Radar(canvas, map.airport, radarDisplayFor(settings));
-  mapSelect.value = map.id;
-  trafficSelect.value = trafficId;
   selectedId = null;
   prev.clear();
   trails.clear();
@@ -660,6 +690,27 @@ function readParams(): URLSearchParams {
 
 new ResizeObserver(() => radar.resize()).observe(canvas);
 
-startGame();
+// A shared link (?map=vabb&seed=123&traffic=busy) preselects the menu and its seed is used once.
+let seedFromLink: number | null = Number(params.get('seed')) || null;
+
+const menu = new Menu({
+  settings: () => settings,
+  onSettings: (s) => {
+    settings = s;
+  },
+  onStart: (choice) => enterSession(choice),
+  onLoad: async (f) => {
+    const parsed = parseSession(await f.text());
+    if (!parsed.ok) return `Could not load ${f.name}: ${parsed.error}`;
+    const level = TRAFFIC_LEVELS.find((t) => JSON.stringify(t.profile) === JSON.stringify(parsed.file.traffic));
+    enterSession({ map: findMap(parsed.file.map), mode: 'approach', traffic: (level?.id ?? 'normal') as MenuStart['traffic'], settings }, parsed.file);
+    if (!level) {
+      $('session-meta').textContent = 'Approach · Loaded from file';
+    }
+    return null;
+  },
+  initial: { map: params.get('map'), mode: params.get('mode'), traffic: params.get('traffic') },
+});
+
 requestAnimationFrame(frame);
-if (mode === 'ground') setMode('ground');
+menu.show();

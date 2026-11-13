@@ -2,11 +2,15 @@
 
 A browser-based air traffic control game. Vector arrivals onto the runway, sequence departures and keep everyone separated, or switch to the ground and taxi aircraft around a practice airport.
 
-## ▶ [Play now](https://spaceacer.github.io/atc-sim/ATC-Sim-0.7.1.html)
+## ▶ [Play now](https://spaceacer.github.io/atc-sim/)
 
 No install, no account. It runs entirely in your browser, and works on desktop (a keyboard is recommended).
 
-**Version 0.7.1**
+**Version 0.8.0**
+
+## Getting started
+
+The game opens on a main menu. Pick an airport, your position (approach radar or ground) and a difficulty: **Training**, **Standard**, **Expert**, or **Custom** to set traffic, wind, rules and assistance yourself. Then press **Start session**. To change any of these later, use **Menu** in the game panel.
 
 ## Two modes
 
@@ -52,8 +56,9 @@ Ground mode uses `PUSH E`, `TAXI A5`, `HOLD`, `CONT` and `CROSS`.
 
 - Realistic per-type performance for 15 aircraft types (A320 family, 737, 787, 777, ATR 72 and more)
 - Wake turbulence spacing and intersection takeoffs
-- Adjustable traffic, weather and rules in **Settings** (gear button)
-- Save a session to a file and load it later to replay it exactly
+- Difficulty presets, or set traffic, weather, rules and assistance yourself
+- Scope display and assistance adjustable in-game in **Settings** (gear button)
+- Save a session to a file and load it later from the main menu to replay it exactly
 
 ## Good to know
 
@@ -63,6 +68,10 @@ Ground mode uses `PUSH E`, `TAXI A5`, `HOLD`, `CONT` and `CROSS`.
 ## Feedback
 
 Found a bug or have an idea? Open an [issue](../../issues) on this repository.
+
+## Source
+
+The full source (TypeScript engine and UI, tests, Python tooling for AI controllers) is in [`source/`](source/). See [`source/README.md`](source/README.md) to build and run it.
 
 ## Licence
 

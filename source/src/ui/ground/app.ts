@@ -39,7 +39,6 @@ interface Els {
   actions: HTMLElement;
   form: HTMLFormElement;
   input: HTMLInputElement;
-  traffic: HTMLSelectElement;
   newGame: HTMLElement;
   clock: HTMLElement;
   rate: HTMLElement;
@@ -75,9 +74,7 @@ export class GroundApp {
   private strips = new Map<number, { li: HTMLLIElement; text: string; cls: string }>();
 
   constructor(private readonly el: Els) {
-    for (const t of GROUND_TRAFFIC) el.traffic.add(new Option(t.label, t.id));
     buildTicks(el.dialTicks);
-    el.traffic.value = this.trafficId;
     this.sim = this.newSim();
     this.view = new GroundView(el.canvas, XGND, this.sim.graph);
     this.wire();
@@ -424,14 +421,16 @@ export class GroundApp {
       b.addEventListener('click', () => this.setSpeed(Number(b.dataset.gspeed)));
     }
     this.el.newGame.addEventListener('click', () => this.restart());
-    this.el.traffic.addEventListener('change', () => {
-      this.trafficId = this.el.traffic.value;
-      this.restart();
-    });
   }
 
-  start(): void {
+  /** A new session at the given traffic level (chosen on the main menu). */
+  start(trafficId: string): void {
+    this.trafficId = GROUND_TRAFFIC.some((t) => t.id === trafficId) ? trafficId : 'normal';
     this.restart();
+  }
+
+  pause(): void {
+    this.setSpeed(0);
   }
 
   /** Settings changed: rebuild the action buttons. */
