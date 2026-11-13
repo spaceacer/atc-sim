@@ -1,0 +1,14 @@
+{
+  "format": "atc-sim-session",
+  "version": 1,
+  "note": "Practice field, arrivals only, calm wind: learn vectoring to final.",
+  "map": "xdem",
+  "seed": 1,
+  "traffic": {
+    "arrivals": { "minIntervalSec": 90, "maxIntervalSec": 150, "firstSec": 2 },
+    "departures": { "minIntervalSec": 60, "maxIntervalSec": 60, "firstSec": 0, "max": 0 }
+  },
+  "weather": { "variable": false, "initialWind": { "direction": 270, "speed": 0 } },
+  "tick": 0,
+  "commands": []
+}

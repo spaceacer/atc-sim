@@ -1,0 +1,16 @@
+[project]
+name = "atc-sim"
+version = "0.7.1"
+description = "Python interface to the ATC simulator engine (runs the TypeScript engine through Node)"
+requires-python = ">=3.9"
+dependencies = ["numpy>=1.22"]
+
+[project.optional-dependencies]
+gym = ["gymnasium>=0.29"]
+
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["atc_sim"]

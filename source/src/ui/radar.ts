@@ -1,0 +1,535 @@
+// Canvas 2D radar scope. Reads engine state only; never mutates it.
+// The scope is the rectangular airspace boundary, fitted to the canvas.
+
+import type { Aircraft, Airport, Fix, SimState } from '../engine/index.js';
+import { HOLD_LEG_SEC, MIN_LATERAL_NM, findFix, findRunway, headingVector } from '../engine/index.js';
+
+export const COLORS = {
+  outside: '#0F191F',
+  scope: '#17242C',
+  boundary: '#3A5262',
+  grid: '#1D2D37',
+  runway: '#C9D4DA',
+  runwayIdle: '#6F8A99',
+  centreline: '#4A6B7D',
+  fix: '#7F98A6',
+  exit: '#9DB3C0',
+  blip: '#E6EEF0',
+  dataBlock: '#A8E6C1',
+  departure: '#F2C46D',
+  cleared: '#7FD3FF',
+  selected: '#FFC857',
+  conflict: '#FF5A4E',
+  warning: '#FF9F1C',
+  trail: '#6F8A99',
+  scale: '#7F98A6',
+} as const;
+
+const FONT = '"JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace';
+const MARGIN_PX = 14;
+const CENTRELINE_NM = 15;
+
+/** Scope display options (Settings > Scope display and Assistance). */
+export interface RadarDisplay {
+  labelPx: number; // data block font size
+  leaderSec: number; // leader line length in seconds of flight; 0 = none
+  rangeRings: boolean; // every 10 nm around the airport
+  fixNames: boolean;
+  conflictAlerts: boolean; // show predicted conflicts in orange
+}
+
+export const DEFAULT_DISPLAY: RadarDisplay = { labelPx: 11, leaderSec: 60, rangeRings: false, fixNames: true, conflictAlerts: true };
+const BLIP_HIT_PX = 14;
+
+export interface Prev {
+  x: number;
+  y: number;
+}
+
+export interface Trail {
+  points: { x: number; y: number }[];
+}
+
+interface HitBox {
+  id: number;
+  sx: number;
+  sy: number;
+  // Data block rectangle
+  bx: number;
+  by: number;
+  bw: number;
+  bh: number;
+}
+
+export class Radar {
+  private readonly canvas: HTMLCanvasElement;
+  private readonly ctx: CanvasRenderingContext2D;
+  private readonly staticLayer: HTMLCanvasElement;
+  readonly airport: Airport;
+  private inUse: string[] = [];
+  private w = 0;
+  private h = 0;
+  private dpr = 1;
+  private scale = 1; // px per nm
+  private cx = 0;
+  private cy = 0;
+  /** Screen positions from the last frame, for click hit-testing. */
+  private hitTargets: HitBox[] = [];
+  private display: RadarDisplay = DEFAULT_DISPLAY;
+
+  constructor(canvas: HTMLCanvasElement, airport: Airport, display: RadarDisplay = DEFAULT_DISPLAY) {
+    this.display = display;
+    this.canvas = canvas;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas 2D not available');
+    this.ctx = ctx;
+    this.staticLayer = document.createElement('canvas');
+    this.airport = airport;
+    this.resize();
+  }
+
+  resize(): void {
+    const rect = this.canvas.getBoundingClientRect();
+    this.dpr = window.devicePixelRatio || 1;
+    this.w = Math.max(1, rect.width);
+    this.h = Math.max(1, rect.height);
+    for (const c of [this.canvas, this.staticLayer]) {
+      c.width = Math.round(this.w * this.dpr);
+      c.height = Math.round(this.h * this.dpr);
+    }
+    const { halfWidth, halfHeight } = this.airport.boundary;
+    this.scale = Math.min((this.w - 2 * MARGIN_PX) / (2 * halfWidth), (this.h - 2 * MARGIN_PX) / (2 * halfHeight));
+    this.cx = this.w / 2;
+    this.cy = this.h / 2;
+    this.drawStatic();
+  }
+
+  setDisplay(display: RadarDisplay): void {
+    this.display = display;
+    this.drawStatic();
+  }
+
+  /** Redraw centrelines when the runways in use change. */
+  setRunwaysInUse(inUse: readonly string[]): void {
+    if (inUse.join() === this.inUse.join()) return;
+    this.inUse = [...inUse];
+    this.drawStatic();
+  }
+
+  /** Aircraft under a click: its blip, or its data block. Null if none. */
+  pick(clientX: number, clientY: number): number | null {
+    const rect = this.canvas.getBoundingClientRect();
+    const px = clientX - rect.left;
+    const py = clientY - rect.top;
+    let best: number | null = null;
+    let bestD = BLIP_HIT_PX;
+    for (const t of this.hitTargets) {
+      const d = Math.hypot(t.sx - px, t.sy - py);
+      if (d < bestD) {
+        bestD = d;
+        best = t.id;
+      }
+    }
+    if (best !== null) return best;
+    // Data blocks: last drawn is on top.
+    for (let i = this.hitTargets.length - 1; i >= 0; i--) {
+      const t = this.hitTargets[i];
+      if (px >= t.bx - 3 && px <= t.bx + t.bw + 3 && py >= t.by - 3 && py <= t.by + t.bh + 3) return t.id;
+    }
+    return null;
+  }
+
+  /** True if the point is over an aircraft (for the hover cursor). */
+  isOverAircraft(clientX: number, clientY: number): boolean {
+    return this.pick(clientX, clientY) !== null;
+  }
+
+  render(state: SimState, prev: Map<number, Prev>, alpha: number, selectedId: number | null, trails: Map<number, Trail>): void {
+    const ctx = this.ctx;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(this.staticLayer, 0, 0);
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.hitTargets = [];
+
+    const selected = state.aircraft.find((a) => a.id === selectedId);
+    if (selected) this.drawSelectionAids(selected);
+
+    // Draw selected aircraft last so its block sits on top.
+    for (const ac of state.aircraft) {
+      if (ac.id !== selectedId) this.drawOne(ac, prev, alpha, false, trails);
+    }
+    if (selected) this.drawOne(selected, prev, alpha, true, trails);
+  }
+
+  private drawOne(ac: Aircraft, prev: Map<number, Prev>, alpha: number, selected: boolean, trails: Map<number, Trail>): void {
+    if (ac.status === 'waiting') return; // holding short: shown on the strips only
+    const p = prev.get(ac.id);
+    const x = p ? p.x + (ac.x - p.x) * alpha : ac.x;
+    const y = p ? p.y + (ac.y - p.y) * alpha : ac.y;
+    this.drawAircraft(ac, x, y, selected, trails.get(ac.id));
+  }
+
+  private sx(x: number): number {
+    return this.cx + x * this.scale;
+  }
+
+  private sy(y: number): number {
+    return this.cy - y * this.scale;
+  }
+
+  // -------------------------------------------------------------------------
+  // Static layer: boundary, grid, runways, fixes
+
+  private drawStatic(): void {
+    const ctx = this.staticLayer.getContext('2d');
+    if (!ctx) return;
+    const { halfWidth: hw, halfHeight: hh } = this.airport.boundary;
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    ctx.fillStyle = COLORS.outside;
+    ctx.fillRect(0, 0, this.w, this.h);
+
+    // Airspace rectangle.
+    const left = this.sx(-hw);
+    const top = this.sy(hh);
+    const width = 2 * hw * this.scale;
+    const height = 2 * hh * this.scale;
+    ctx.fillStyle = COLORS.scope;
+    ctx.fillRect(left, top, width, height);
+
+    // 10 nm grid, faint.
+    ctx.strokeStyle = COLORS.grid;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let gx = -Math.floor(hw / 10) * 10; gx <= hw; gx += 10) {
+      ctx.moveTo(Math.round(this.sx(gx)) + 0.5, top);
+      ctx.lineTo(Math.round(this.sx(gx)) + 0.5, top + height);
+    }
+    for (let gy = -Math.floor(hh / 10) * 10; gy <= hh; gy += 10) {
+      ctx.moveTo(left, Math.round(this.sy(gy)) + 0.5);
+      ctx.lineTo(left + width, Math.round(this.sy(gy)) + 0.5);
+    }
+    ctx.stroke();
+
+    ctx.strokeStyle = COLORS.boundary;
+    ctx.strokeRect(Math.round(left) + 0.5, Math.round(top) + 0.5, Math.round(width), Math.round(height));
+
+    if (this.display.rangeRings) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(left, top, width, height);
+      ctx.clip();
+      ctx.strokeStyle = COLORS.boundary;
+      ctx.setLineDash([2, 5]);
+      for (let r = 10; r <= Math.hypot(hw, hh); r += 10) {
+        ctx.beginPath();
+        ctx.arc(this.sx(0), this.sy(0), r * this.scale, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // Extended centrelines for runways in use, 1 nm ticks, longer every 5 nm.
+    for (const rwy of this.airport.runways) {
+      if (!this.inUse.includes(rwy.id) || rwy.ils === false) continue; // no ILS: no centreline (visual approach)
+      const { dx, dy } = headingVector(rwy.heading);
+      const ax = -dx;
+      const ay = -dy;
+      ctx.strokeStyle = COLORS.centreline;
+      ctx.setLineDash([6, 6]);
+      ctx.beginPath();
+      ctx.moveTo(this.sx(rwy.thresholdX), this.sy(rwy.thresholdY));
+      ctx.lineTo(this.sx(rwy.thresholdX + ax * CENTRELINE_NM), this.sy(rwy.thresholdY + ay * CENTRELINE_NM));
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      for (let d = 1; d <= CENTRELINE_NM; d++) {
+        const px = rwy.thresholdX + ax * d;
+        const py = rwy.thresholdY + ay * d;
+        const len = d % 5 === 0 ? 0.6 : 0.25;
+        ctx.moveTo(this.sx(px - ay * len), this.sy(py + ax * len));
+        ctx.lineTo(this.sx(px + ay * len), this.sy(py - ax * len));
+      }
+      ctx.stroke();
+    }
+
+    // Runways, drawn enlarged as in ATC-SIM, labelled at each end.
+    const drawn = new Set<string>();
+    const half = this.airport.displayRunwayWidth / 2;
+    for (const a of this.airport.runways) {
+      if (drawn.has(a.id)) continue;
+      const b = findRunway(this.airport, a.oppositeId);
+      if (!b) continue;
+      drawn.add(a.id).add(b.id);
+      const active = this.inUse.includes(a.id) || this.inUse.includes(b.id);
+      const { dx, dy } = headingVector(a.heading);
+      const nx = dy;
+      const ny = -dx;
+      ctx.fillStyle = active ? COLORS.runway : COLORS.runwayIdle;
+      ctx.beginPath();
+      ctx.moveTo(this.sx(a.thresholdX + nx * half), this.sy(a.thresholdY + ny * half));
+      ctx.lineTo(this.sx(b.thresholdX + nx * half), this.sy(b.thresholdY + ny * half));
+      ctx.lineTo(this.sx(b.thresholdX - nx * half), this.sy(b.thresholdY - ny * half));
+      ctx.lineTo(this.sx(a.thresholdX - nx * half), this.sy(a.thresholdY - ny * half));
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.font = `600 11px ${FONT}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (const rwy of this.airport.runways) {
+      // Label just beyond the threshold, on the approach side.
+      const { dx, dy } = headingVector(rwy.heading);
+      const off = 14 / this.scale + 0.15;
+      ctx.fillStyle = this.inUse.includes(rwy.id) ? COLORS.runway : COLORS.runwayIdle;
+      ctx.fillText(rwy.id, this.sx(rwy.thresholdX - dx * off), this.sy(rwy.thresholdY - dy * off));
+    }
+
+    // Fixes.
+    ctx.font = `10px ${FONT}`;
+    ctx.textBaseline = 'middle';
+    for (const f of this.airport.fixes) this.drawFix(ctx, f, f.kind === 'exit' ? COLORS.exit : COLORS.fix);
+
+    // Scale bar, bottom left inside the boundary.
+    const barNm = 5;
+    const bx = left + 12;
+    const by = top + height - 14;
+    ctx.strokeStyle = COLORS.scale;
+    ctx.beginPath();
+    ctx.moveTo(bx, by - 4);
+    ctx.lineTo(bx, by);
+    ctx.lineTo(bx + barNm * this.scale, by);
+    ctx.lineTo(bx + barNm * this.scale, by - 4);
+    ctx.stroke();
+    ctx.fillStyle = COLORS.scale;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText(`${barNm} nm`, bx + barNm * this.scale + 6, by + 1);
+
+    // Airport name, top left.
+    ctx.font = `600 11px ${FONT}`;
+    ctx.fillText(`${this.airport.icao}  ${this.airport.city.toUpperCase()}`, left + 12, top + 18);
+  }
+
+  private drawFix(ctx: CanvasRenderingContext2D, f: Fix, color: string): void {
+    const x = this.sx(f.x);
+    const y = this.sy(f.y);
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    if (f.kind === 'exit') {
+      // Triangle, label pushed inside the scope.
+      ctx.moveTo(x, y - 5);
+      ctx.lineTo(x + 5, y + 4);
+      ctx.lineTo(x - 5, y + 4);
+      ctx.closePath();
+      ctx.stroke();
+    } else {
+      // Four-point star, like ATC-SIM.
+      ctx.moveTo(x, y - 5);
+      ctx.lineTo(x + 1.5, y - 1.5);
+      ctx.lineTo(x + 5, y);
+      ctx.lineTo(x + 1.5, y + 1.5);
+      ctx.lineTo(x, y + 5);
+      ctx.lineTo(x - 1.5, y + 1.5);
+      ctx.lineTo(x - 5, y);
+      ctx.lineTo(x - 1.5, y - 1.5);
+      ctx.closePath();
+      ctx.stroke();
+    }
+    if (!this.display.fixNames && f.kind !== 'exit') return;
+    const { halfWidth: hw, halfHeight: hh } = this.airport.boundary;
+    const labelW = ctx.measureText(f.name).width;
+    let lx = x + 13;
+    let ly = y;
+    ctx.textAlign = 'left';
+    if (f.x >= hw - 0.01) lx = x - 13 - labelW;
+    if (f.y >= hh - 0.01) {
+      lx = x - labelW / 2;
+      ly = y + 16;
+    }
+    if (f.y <= -hh + 0.01) {
+      lx = x - labelW / 2;
+      ly = y - 15;
+    }
+    ctx.fillText(f.name, lx, ly);
+  }
+
+  // -------------------------------------------------------------------------
+  // Dynamic layer
+
+  /** For the selected aircraft: line to the next fix, highlighted exit fix. */
+  private drawSelectionAids(ac: Aircraft): void {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.strokeStyle = COLORS.selected;
+    ctx.fillStyle = COLORS.selected;
+    ctx.font = `10px ${FONT}`;
+    ctx.textBaseline = 'middle';
+    if (ac.lateralMode === 'direct' && ac.route.length > 0 && ac.status === 'airborne') {
+      ctx.setLineDash([4, 5]);
+      ctx.globalAlpha = 0.7;
+      ctx.beginPath();
+      ctx.moveTo(this.sx(ac.x), this.sy(ac.y));
+      for (const name of ac.route) {
+        const f = findFix(this.airport, name);
+        if (f) ctx.lineTo(this.sx(f.x), this.sy(f.y));
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+    }
+    if (ac.lateralMode === 'hold' && ac.hold) this.drawHold(ac);
+    const exit = ac.exitFix ? findFix(this.airport, ac.exitFix) : undefined;
+    if (exit) {
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(this.sx(exit.x), this.sy(exit.y), 11, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.lineWidth = 1;
+      this.drawFix(ctx, exit, COLORS.selected);
+    }
+    ctx.restore();
+  }
+
+  /** Racetrack outline for a holding aircraft, at its current speed. */
+  private drawHold(ac: Aircraft): void {
+    const h = ac.hold;
+    if (!h) return;
+    const ctx = this.ctx;
+    const { dx: ux, dy: uy } = headingVector(h.inbound);
+    const side = h.turn === 'R' ? 1 : -1;
+    const sx = uy * side; // unit vector toward the hold side
+    const sy = -ux * side;
+    const r = Math.max(ac.speed, 150) / 3600 / ((3 * Math.PI) / 180); // turn radius, nm
+    const leg = (Math.max(ac.speed, 150) / 3600) * HOLD_LEG_SEC;
+    const pts: { x: number; y: number }[] = [];
+    const arc = (cx: number, cy: number, startX: number, startY: number) => {
+      // Half circle from start around (cx, cy), turning in the hold direction.
+      const a0 = Math.atan2(startY - cy, startX - cx);
+      for (let k = 0; k <= 12; k++) {
+        const a = a0 - side * (Math.PI * k) / 12;
+        pts.push({ x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r });
+      }
+    };
+    const fx = h.x;
+    const fy = h.y;
+    arc(fx + sx * r, fy + sy * r, fx, fy); // turn at the fix
+    const bx = fx + sx * 2 * r - ux * leg;
+    const by = fy + sy * 2 * r - uy * leg;
+    arc(fx - ux * leg + sx * r, fy - uy * leg + sy * r, bx, by); // turn at the far end
+    ctx.save();
+    ctx.strokeStyle = COLORS.selected;
+    ctx.globalAlpha = 0.6;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    pts.forEach((p, i) => (i === 0 ? ctx.moveTo(this.sx(p.x), this.sy(p.y)) : ctx.lineTo(this.sx(p.x), this.sy(p.y))));
+    ctx.closePath();
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  private drawAircraft(ac: Aircraft, x: number, y: number, selected: boolean, trail: Trail | undefined): void {
+    const ctx = this.ctx;
+    const px = this.sx(x);
+    const py = this.sy(y);
+
+    const cleared = ac.lateralMode === 'approach' || ac.lateralMode === 'localizer';
+    const base = cleared ? COLORS.cleared : ac.isArrival ? COLORS.dataBlock : COLORS.departure;
+    const warn = ac.conflictWarning && this.display.conflictAlerts;
+    const color = ac.inConflict
+      ? COLORS.conflict
+      : warn
+        ? COLORS.warning
+        : selected
+          ? COLORS.selected
+          : base;
+
+    // History trail.
+    if (trail) {
+      ctx.fillStyle = COLORS.trail;
+      trail.points.forEach((pt, i) => {
+        ctx.globalAlpha = 0.25 + (0.6 * (i + 1)) / trail.points.length;
+        ctx.fillRect(this.sx(pt.x) - 1, this.sy(pt.y) - 1, 2, 2);
+      });
+      ctx.globalAlpha = 1;
+    }
+
+    // Leader line: where it will be in 60 s on the current heading.
+    if (this.display.leaderSec > 0 && (ac.status === 'airborne' || ac.status === 'rolling' || ac.status === 'rollout')) {
+      const { dx, dy } = headingVector(ac.heading);
+      const lead = (Math.max(ac.speed, 60) / 3600) * this.display.leaderSec;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(px, py);
+      ctx.lineTo(this.sx(x + dx * lead), this.sy(y + dy * lead));
+      ctx.stroke();
+    }
+
+    // Separation circle when in conflict.
+    if (ac.inConflict) {
+      ctx.strokeStyle = COLORS.conflict;
+      ctx.setLineDash([3, 4]);
+      ctx.beginPath();
+      ctx.arc(px, py, (MIN_LATERAL_NM / 2) * this.scale, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // Blip.
+    ctx.fillStyle = selected || ac.inConflict || warn ? color : COLORS.blip;
+    ctx.fillRect(px - 3, py - 3, 6, 6);
+    if (selected) {
+      ctx.strokeStyle = COLORS.selected;
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(px - 7, py - 7, 14, 14);
+      ctx.lineWidth = 1;
+    }
+
+    // Data block.
+    const lines = [ac.callsign, altitudeLine(ac)];
+    if (selected) lines.push(`${ac.type} ${modeLine(ac)}`);
+    const fs = this.display.labelPx;
+    const lh = Math.round(fs * 1.2);
+    ctx.font = `${fs}px ${FONT}`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    const bx = px + 10;
+    const by = py - 12;
+    let bw = 0;
+    for (const l of lines) bw = Math.max(bw, ctx.measureText(l).width);
+    if (selected) {
+      ctx.fillStyle = 'rgba(15, 25, 31, 0.78)';
+      ctx.fillRect(bx - 3, by - fs, bw + 6, lines.length * lh + 3);
+    }
+    ctx.fillStyle = color;
+    lines.forEach((l, i) => ctx.fillText(l, bx, by + i * lh));
+    this.hitTargets.push({ id: ac.id, sx: px, sy: py, bx, by: by - fs + 1, bw, bh: lines.length * lh });
+  }
+}
+
+function altitudeLine(ac: Aircraft): string {
+  const alt = pad3(Math.round(ac.altitude / 100));
+  const diff = ac.targetAltitude - ac.altitude;
+  const spd = String(Math.round(ac.speed / 10)).padStart(2, '0');
+  if (ac.status === 'lineup') return `${alt} LUAW`;
+  if (ac.status === 'rollout') return `${alt} ${String(Math.round(ac.speed / 10)).padStart(2, '0')}`;
+  if (Math.abs(diff) < 50) return `${alt} ${spd}`;
+  return `${alt}${diff > 0 ? '↑' : '↓'}${pad3(Math.round(ac.targetAltitude / 100))} ${spd}`;
+}
+
+function modeLine(ac: Aircraft): string {
+  if (ac.lateralMode === 'localizer') return ac.landingCleared ? `FINAL ${ac.runway}` : `ILS ${ac.runway}`;
+  if (ac.lateralMode === 'approach') return ac.landingCleared ? `CLR ${ac.runway}` : `INT ${ac.runway}`;
+  // (visual approaches show the same codes; the scope draws no centreline for them)
+  if (ac.lateralMode === 'direct' && ac.route.length > 0) return `→${ac.route[0]}`;
+  if (ac.lateralMode === 'hold' && ac.hold) return `HOLD ${ac.hold.fix ?? ''}`.trim();
+  if (ac.status === 'rolling') return `ROLL ${ac.runway}`;
+  if (ac.status === 'rollout') return `SLOWING ${ac.runway}`;
+  return `H${pad3(ac.targetHeading)}`;
+}
+
+function pad3(n: number): string {
+  return String(Math.round(n)).padStart(3, '0');
+}

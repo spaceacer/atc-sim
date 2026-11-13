@@ -1,0 +1,14 @@
+{
+  "format": "atc-sim-session",
+  "version": 1,
+  "note": "Mumbai, busy traffic, steady 12 kt westerly: runways 27 and 32 in use.",
+  "map": "vabb",
+  "seed": 2027,
+  "traffic": {
+    "arrivals": { "minIntervalSec": 40, "maxIntervalSec": 75, "firstSec": 2 },
+    "departures": { "minIntervalSec": 60, "maxIntervalSec": 110, "firstSec": 15 }
+  },
+  "weather": { "variable": false, "initialWind": { "direction": 270, "speed": 12 } },
+  "tick": 0,
+  "commands": []
+}

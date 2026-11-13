@@ -1,0 +1,14 @@
+{
+  "format": "atc-sim-session",
+  "version": 1,
+  "note": "Mumbai, normal traffic, light northerly that wanders: expect runway changes.",
+  "map": "vabb",
+  "seed": 404,
+  "traffic": {
+    "arrivals": { "minIntervalSec": 60, "maxIntervalSec": 120, "firstSec": 2 },
+    "departures": { "minIntervalSec": 90, "maxIntervalSec": 180, "firstSec": 20 }
+  },
+  "weather": { "variable": true, "initialWind": { "direction": 10, "speed": 7 } },
+  "tick": 0,
+  "commands": []
+}
