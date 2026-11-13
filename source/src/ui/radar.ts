@@ -160,7 +160,8 @@ export class Radar {
       c.height = Math.round(this.h * this.dpr);
     }
     const { halfWidth, halfHeight } = this.airport.boundary;
-    this.scale = Math.min((this.w - 2 * MARGIN_PX) / (2 * halfWidth), (this.h - 2 * MARGIN_PX) / (2 * halfHeight));
+    // A hidden canvas measures about 0 px; never let the scale go negative (canvas arcs throw on a negative radius).
+    this.scale = Math.max(0.01, Math.min((this.w - 2 * MARGIN_PX) / (2 * halfWidth), (this.h - 2 * MARGIN_PX) / (2 * halfHeight)));
     this.cx = this.w / 2;
     this.cy = this.h / 2;
     this.drawStatic();
@@ -415,7 +416,7 @@ export class Radar {
     ctx.strokeStyle = COLORS.boundary;
     ctx.strokeRect(Math.round(left) + 0.5, Math.round(top) + 0.5, Math.round(width), Math.round(height));
 
-    if (this.display.rangeRings) {
+    if (this.display.rangeRings && this.scale > 0) {
       ctx.save();
       ctx.beginPath();
       ctx.rect(left, top, width, height);

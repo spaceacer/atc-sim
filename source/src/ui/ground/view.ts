@@ -64,7 +64,7 @@ export class GroundView {
       c.width = Math.round(this.w * this.dpr);
       c.height = Math.round(this.h * this.dpr);
     }
-    this.scale = Math.min((this.w - 2 * MARGIN) / (2 * this.airport.halfWidth), (this.h - 2 * MARGIN) / (2 * this.airport.halfHeight));
+    this.scale = Math.max(1e-4, Math.min((this.w - 2 * MARGIN) / (2 * this.airport.halfWidth), (this.h - 2 * MARGIN) / (2 * this.airport.halfHeight)));
     this.drawStatic();
   }
 

@@ -403,6 +403,15 @@ export class Menu {
 
   private drawPreview(): void {
     if (this.root.hidden) return;
+    try {
+      this.paintPreview();
+    } catch (err) {
+      // The map is decoration: a drawing problem must never stop the menu from working.
+      console.error(err);
+    }
+  }
+
+  private paintPreview(): void {
     const a = this.map.airport;
     const ground = this.mode === 'ground';
     if (ground) {

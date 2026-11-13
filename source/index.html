@@ -3,8 +3,8 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="version" content="0.11.0" />
-    <title>ATC Simulator 0.11.0</title>
+    <meta name="version" content="0.11.1" />
+    <title>ATC Simulator 0.11.1</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -12,6 +12,29 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./src/ui/style.css" />
+    <script>
+      // Startup safety net: if the game fails to start, say so on screen (with the reason)
+      // and offer to clear this game's saved settings, instead of leaving a half-built page.
+      window.addEventListener('error', function (ev) {
+        if (document.getElementById('boot-error')) return;
+        var msg = (ev && ev.message) || 'unknown error';
+        var where = ev && ev.filename ? ' (line ' + ev.lineno + ':' + ev.colno + ')' : '';
+        var box = document.createElement('div');
+        box.id = 'boot-error';
+        box.setAttribute('role', 'alert');
+        box.style.cssText = 'position:fixed;left:50%;top:16px;transform:translateX(-50%);z-index:1000;max-width:640px;padding:14px 16px;border-radius:8px;background:#fff3f2;color:#5c1410;border:1px solid #b3261e;font:14px/1.4 system-ui,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.3)';
+        box.innerHTML = '<strong>Something went wrong.</strong> <span></span><div style="margin-top:10px;display:flex;gap:8px"><button type="button" data-reset>Clear saved settings and reload</button><button type="button" data-close>Close</button></div>';
+        box.querySelector('span').textContent = msg + where;
+        box.querySelector('[data-reset]').onclick = function () {
+          try {
+            Object.keys(localStorage).forEach(function (k) { if (k.indexOf('atc-sim') === 0) localStorage.removeItem(k); });
+          } catch (e) {}
+          location.href = location.pathname;
+        };
+        box.querySelector('[data-close]').onclick = function () { box.remove(); };
+        (document.body || document.documentElement).appendChild(box);
+      });
+    </script>
   </head>
   <body>
     <section id="menu" class="menu" aria-label="Main menu">
@@ -19,7 +42,7 @@
         <div class="wordmark">
           <span class="wordmark-dot" aria-hidden="true"></span>
           <h1>ATC Simulator</h1>
-          <span class="wordmark-version">v<span id="menu-version">0.11.0</span></span>
+          <span class="wordmark-version">v<span id="menu-version">0.11.1</span></span>
         </div>
         <button id="menu-help" type="button" class="m-link">How to play</button>
       </header>
@@ -151,7 +174,7 @@
               than 5 kt of tailwind and a runway closes. Session seed <span id="seed"></span>.
             </p>
           </details>
-          <p class="version">ATC Simulator <span id="version">0.11.0</span></p>
+          <p class="version">ATC Simulator <span id="version">0.11.1</span></p>
         </div>
 
         <footer class="speed-bar">
@@ -239,7 +262,7 @@
               cargo stands are south of the runway, so cargo traffic has to cross it.
             </p>
           </details>
-          <p class="version">ATC Simulator <span class="version-number">0.11.0</span></p>
+          <p class="version">ATC Simulator <span class="version-number">0.11.1</span></p>
         </div>
 
         <footer class="speed-bar">

@@ -9,6 +9,19 @@ While the major version is 0, a minor release may also change behaviour that
 saved sessions or trained agents rely on; such changes are listed under
 **Changed**.
 
+## 0.11.1 - 2026-11-13
+
+### Fixed
+- With *Range rings* switched on in Settings, the game failed to start: the
+  main menu showed no airports or difficulty. The radar is created while
+  hidden, its scale came out negative, and drawing a ring with a negative
+  radius threw an error. The scale can no longer go negative, and a problem
+  drawing the menu's map can no longer stop the menu.
+
+### Added
+- If the game ever fails to start, a banner says why and offers to clear this
+  game's saved settings and reload.
+
 ## 0.11.0 - 2026-11-13
 
 ### Added
