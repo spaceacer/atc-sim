@@ -19,7 +19,7 @@ import type {
   SimEvent,
   SimState,
 } from './types.js';
-import { CATEGORY_TYPE, performanceOf, takeoffRunNeeded, typeData } from './aircraft/performance.js';
+import { CATEGORY_TYPE, performanceOf, takeoffRunNeeded } from './aircraft/performance.js';
 import { departureWakeSec } from './rules/wake.js';
 import { integrate } from './aircraft/flight.js';
 import {
@@ -55,13 +55,13 @@ import { createRng, type RngState } from './rng.js';
 import { distance, normHeading } from './geometry.js';
 
 /** Seconds of simulated time per tick. */
-/** Seconds to line up from the holding point, by type (taxi onto the runway and align). */
-export function lineUpSec(ac: Aircraft): number {
-  if (ac.category === 'heavy') return 45;
-  return typeData(ac.type)?.engines === 'turboprop' ? 25 : 35;
+/** Seconds to line up from the holding point (taxi onto the runway and align). */
+export const LINE_UP_SEC = 10;
+export function lineUpSec(_ac: Aircraft): number {
+  return LINE_UP_SEC;
 }
 /** Cleared straight for takeoff, the line-up flows into the roll and is this much quicker. */
-export const ROLLING_START_SAVING_SEC = 10;
+export const ROLLING_START_SAVING_SEC = 4;
 /** Seconds to vacate the runway after a cancelled line-up or a rejected takeoff. */
 export const VACATE_SEC = 40;
 /** A takeoff can be rejected until this many knots below lift-off speed (about V1). */

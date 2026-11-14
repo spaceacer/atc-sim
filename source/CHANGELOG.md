@@ -9,6 +9,14 @@ While the major version is 0, a minor release may also change behaviour that
 saved sessions or trained agents rely on; such changes are listed under
 **Changed**.
 
+## 0.12.2 - 2026-11-14
+
+### Changed
+- Lining up takes 10 s for every aircraft type (it was 25 s for turboprops,
+  35 s for jets and 45 s for heavies); a takeoff clearance straight from
+  holding short is a rolling start, 4 s quicker (it was 10 s). Departures
+  therefore leave sooner than in 0.12.1, so saved sessions replay differently.
+
 ## 0.12.1 - 2026-11-13
 
 ### Changed
