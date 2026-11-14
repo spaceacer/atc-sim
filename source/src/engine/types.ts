@@ -254,6 +254,7 @@ export type SimEvent =
   | { type: 'wrongExit'; tick: number; callsign: string; reason: string }
   | { type: 'leftAirspace'; tick: number; callsign: string }
   | { type: 'separationLoss'; tick: number; a: string; b: string; distance: number; verticalFt: number }
+  | { type: 'runwayConflict'; tick: number; arrival: string; blocker: string; runway: string; distanceNm: number }
   | { type: 'commandAccepted'; tick: number; callsign: string; message: string }
   | { type: 'commandRejected'; tick: number; callsign: string; message: string }
   | { type: 'localizerCaptured'; tick: number; callsign: string; runway: string }

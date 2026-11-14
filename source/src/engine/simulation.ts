@@ -62,6 +62,10 @@ export function lineUpSec(_ac: Aircraft): number {
 }
 /** Cleared straight for takeoff, the line-up flows into the roll and is this much quicker. */
 export const ROLLING_START_SAVING_SEC = 4;
+/** An arrival this close to a runway that is still occupied is alerted (orange)... */
+export const RUNWAY_ALERT_NM = 2.5;
+/** ...and this close it is a runway conflict (red, scored). About 25 s from the threshold at approach speed. */
+export const RUNWAY_CONFLICT_NM = 1;
 /** Seconds to vacate the runway after a cancelled line-up or a rejected takeoff. */
 export const VACATE_SEC = 40;
 /** A takeoff can be rejected until this many knots below lift-off speed (about V1). */
@@ -93,6 +97,8 @@ export class Simulation {
   private events: SimEvent[] = [];
   private conflictPairs = new Set<string>();
   private warningPairs = new Set<string>();
+  private runwayConflictPairs = new Set<string>();
+  private runwayWarningPairs = new Set<string>();
   private nextId = 1;
   private log: LoggedCommand[] = [];
   /** Last takeoff per runway strip, for wake turbulence spacing. Rebuilt exactly on replay. */
@@ -253,6 +259,9 @@ export class Simulation {
         this.events.push({ type: 'conflictWarning', tick, a: w.a.callsign, b: w.b.callsign, inSeconds: w.inSeconds });
       }
     }
+
+    // 3c. Runway conflicts: an arrival close in to a runway that is still occupied.
+    this.checkRunwayConflicts(tick);
 
     // 4. New traffic.
     const { traffic } = this.scenario;
@@ -506,7 +515,52 @@ export class Simulation {
     this.events.push({ type: 'wrongExit', tick, callsign: ac.callsign, reason });
   }
 
-  /** Callsign of whatever occupies this runway (or one crossing it), or null if clear. */
+  /**
+   * Runway environment, judged by runway rules rather than 3 nm / 1,000 ft: an
+   * arrival established or cleared for an approach must not cross the threshold
+   * while the runway (or one crossing it) is occupied. Within RUNWAY_ALERT_NM
+   * both aircraft are flagged orange; inside RUNWAY_CONFLICT_NM it is a conflict
+   * (red, scored like a loss of separation). The pilot still goes around at the
+   * threshold if the runway is not clear by then.
+   */
+  private checkRunwayConflicts(tick: number): void {
+    const s = this.state;
+    const { airport } = this.scenario;
+    const nowLoss = new Set<string>();
+    const nowWarn = new Set<string>();
+    for (const ac of s.aircraft) {
+      if (!ac.isArrival || ac.status !== 'airborne' || !ac.runway) continue;
+      if (ac.lateralMode !== 'localizer' && ac.lateralMode !== 'approach') continue;
+      const runway = findRunway(airport, ac.runway);
+      if (!runway) continue;
+      const d = distance(ac.x, ac.y, runway.thresholdX, runway.thresholdY);
+      if (d > RUNWAY_ALERT_NM) continue;
+      const blocker = this.runwayBlocker(runway, ac);
+      const other = blocker ? s.aircraft.find((a) => a.callsign === blocker) : undefined;
+      if (!other) continue;
+      const key = `${ac.id}-${other.id}`;
+      ac.conflictWarning = true;
+      other.conflictWarning = true;
+      if (!this.runwayWarningPairs.has(key)) {
+        this.events.push({ type: 'conflictWarning', tick, a: ac.callsign, b: other.callsign, inSeconds: Math.round((d / Math.max(60, ac.speed)) * 3600) });
+        s.stats.conflictWarnings++;
+      }
+      nowWarn.add(key);
+      if (d <= RUNWAY_CONFLICT_NM) {
+        ac.inConflict = true;
+        other.inConflict = true;
+        nowLoss.add(key);
+        if (!this.runwayConflictPairs.has(key)) {
+          s.stats.separationLosses++;
+          s.stats.score += SCORE.separationLoss;
+          this.events.push({ type: 'runwayConflict', tick, arrival: ac.callsign, blocker: other.callsign, runway: runway.id, distanceNm: d });
+        }
+      }
+    }
+    this.runwayConflictPairs = nowLoss;
+    this.runwayWarningPairs = nowWarn;
+  }
+
   /**
    * Callsign of whatever occupies this runway (or one crossing it), or null if clear.
    * With `lineUpAtNm` (a line-up `lineUpAtNm` down the runway): traffic on the same

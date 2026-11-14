@@ -6,7 +6,7 @@ Two modes: **Approach radar** (vector, sequence and clear arrivals and
 departures) and **Ground** (push back, taxi and hold aircraft on a practice
 airport while the tower and the airborne traffic run automatically).
 
-**Version 0.12.2.** The project follows Semantic Versioning (`MAJOR.MINOR.PATCH`);
+**Version 0.13.0.** The project follows Semantic Versioning (`MAJOR.MINOR.PATCH`);
 what changed in each release is in [CHANGELOG.md](CHANGELOG.md).
 
 In the approach mode, arrivals enter from any edge of a rectangular airspace at
@@ -22,7 +22,7 @@ and a single-runway practice field.
 ## Play
 
 **No install:** play at <https://spaceacer.github.io/atc-sim/>, or double-click
-`ATC-Sim-0.12.2.html` (everything is inside that one file).
+`ATC-Sim-0.13.0.html` (everything is inside that one file).
 
 The game opens on the **main menu**: pick the airport, the position
 (**Approach radar** or **Ground**, where the airport offers it) and the
@@ -88,6 +88,16 @@ runway heading until 500 ft.
 
 - **Separation:** 3 nm or 1,000 ft between airborne aircraft. Pairs where both
   are below 1,000 ft above the field are the tower's business and are not counted.
+  Two arrivals established on the same final are sequenced in trail instead: only
+  the lateral minimum applies, reduced by 0.5 nm (2.5 nm at the default 3 nm).
+- **Runway conflicts:** the runway is judged by runway rules, not by distance in
+  the air. An arrival that is cleared for or established on an approach and is
+  2.5 nm or less from the threshold while the runway (or one crossing it) is
+  occupied by an aircraft lined up, rolling, aborting or rolling out turns both
+  aircraft orange; at 1 nm or less it is a **runway conflict** (red, -20, once
+  per pair). The pilot still goes around at the threshold if the runway is not
+  clear by then (-5). A departure is safe once airborne; sending one off, or
+  lining one up, with an arrival close in is what causes it.
 - **Runways:** one aircraft at a time on a runway and on any runway crossing it
   (09/27 and 14/32 cross at Mumbai). An arrival reaching an occupied runway goes
   around. A landing aircraft rolls out along the runway, braking at its type's
@@ -265,7 +275,7 @@ every command with its tick. **Load saved session or scenario** (main menu) repl
 to the saved moment (paused), reproducing the exact state. A scenario file is the same
 format with no commands; examples are in `scenarios/`. Files record the simulator version that saved them
 (`appVersion`). Saving does not work inside the hosted claude.ai
-page (downloads are blocked there); use `ATC-Sim-0.12.2.html` or `npm run dev`.
+page (downloads are blocked there); use `ATC-Sim-0.13.0.html` or `npm run dev`.
 
 ## Python and AI training
 

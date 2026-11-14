@@ -9,6 +9,25 @@ While the major version is 0, a minor release may also change behaviour that
 saved sessions or trained agents rely on; such changes are listed under
 **Changed**.
 
+## 0.13.0 - 2026-11-14
+
+### Added
+- **Runway conflicts.** An arrival cleared for or established on an approach,
+  2.5 nm or less from the threshold while its runway (or one crossing it) is
+  occupied by an aircraft lined up, rolling, aborting or rolling out, turns
+  both aircraft orange; at 1 nm or less it is a runway conflict: both red, -20
+  (counted as a separation loss, once per pair), event `runwayConflict`. The
+  go-around at the threshold still applies (-5).
+
+### Changed
+- Two arrivals established on the same final are separated laterally only,
+  at 0.5 nm less than the lateral minimum (2.5 nm by default), with no
+  vertical minimum; conflict alerts follow the same rule. Before, they were
+  judged like aircraft in the open (3 nm or 1,000 ft), which flagged normal
+  trail spacing on the ILS.
+- Scores differ from 0.12.2 for the same sessions where an arrival closed
+  in on an occupied runway. The rule-based baseline is unaffected.
+
 ## 0.12.2 - 2026-11-14
 
 ### Changed

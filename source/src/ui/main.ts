@@ -405,6 +405,12 @@ function handleEvents(events: SimEvent[]): void {
         if (settings.pauseOnLoss) pauseFor('separation loss');
         flashScore($('score-box'), 'bad');
         break;
+      case 'runwayConflict':
+        log(`Runway conflict: ${e.arrival} ${e.distanceNm.toFixed(1)} nm from runway ${e.runway}, still occupied by ${e.blocker}`, 'bad');
+        if (settings.sound) beep('loss');
+        if (settings.pauseOnLoss) pauseFor('runway conflict');
+        flashScore($('score-box'), 'bad');
+        break;
       case 'conflictWarning':
         if (!settings.conflictAlerts) break;
         log(`Conflict alert: ${e.a} and ${e.b}, about ${e.inSeconds} s`, 'warn');

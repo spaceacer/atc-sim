@@ -19,6 +19,22 @@ export const DEFAULT_MINIMA: SeparationMinima = { lateralNm: MIN_LATERAL_NM, ver
  */
 export const TOWER_HEIGHT_FT = 1000;
 
+/**
+ * Two arrivals established on the same ILS are in a different environment from
+ * traffic in the air: they are sequenced in trail, so the vertical minimum does
+ * not apply (they are always within a glidepath's height of each other) and the
+ * lateral minimum is reduced by this much (3 nm becomes 2.5 nm).
+ */
+export const FINAL_REDUCTION_NM = 0.5;
+
+/** Minima that apply to this pair: reduced, lateral only, for two arrivals on the same final. */
+export function pairMinima(a: Aircraft, b: Aircraft, minima: SeparationMinima): SeparationMinima {
+  if (a.lateralMode === 'localizer' && b.lateralMode === 'localizer' && a.runway !== null && a.runway === b.runway) {
+    return { lateralNm: Math.max(1, minima.lateralNm - FINAL_REDUCTION_NM), verticalFt: Infinity };
+  }
+  return minima;
+}
+
 export interface SeparationLoss {
   a: Aircraft;
   b: Aircraft;
@@ -37,7 +53,6 @@ export function checkSeparation(
   fieldElevation = 0,
   minima: SeparationMinima = DEFAULT_MINIMA,
 ): SeparationLoss[] {
-  const lat = minima.lateralNm;
   const towerCeiling = fieldElevation + TOWER_HEIGHT_FT;
   for (const ac of aircraft) ac.inConflict = false;
 
@@ -51,8 +66,10 @@ export function checkSeparation(
       const b = aircraft[j];
       if (b.status !== 'airborne') continue;
       if (a.altitude < towerCeiling && b.altitude < towerCeiling) continue;
+      const m = pairMinima(a, b, minima);
+      const lat = m.lateralNm;
       const vertical = Math.abs(a.altitude - b.altitude);
-      if (vertical >= minima.verticalFt) continue;
+      if (vertical >= m.verticalFt) continue;
       const dx = a.x - b.x;
       const dy = a.y - b.y;
       if (Math.abs(dx) >= lat || Math.abs(dy) >= lat) continue;

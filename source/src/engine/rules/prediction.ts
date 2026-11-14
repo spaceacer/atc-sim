@@ -6,7 +6,7 @@
 
 import type { Aircraft } from '../types.js';
 import { performanceOf } from '../aircraft/performance.js';
-import { DEFAULT_MINIMA, TOWER_HEIGHT_FT, type SeparationMinima } from './separation.js';
+import { DEFAULT_MINIMA, TOWER_HEIGHT_FT, pairMinima, type SeparationMinima } from './separation.js';
 
 export const LOOKAHEAD_SEC = 60;
 const SAMPLE_SEC = 5;
@@ -60,7 +60,7 @@ export function predictConflicts(
       if (b.status !== 'airborne') continue;
       if (a.inConflict && b.inConflict) continue; // already a loss, shown as such
       if (Math.abs(a.x - b.x) > prefilterNm || Math.abs(a.y - b.y) > prefilterNm) continue;
-      const t = firstConflictTime(a, b, vx[i], vy[i], vx[j], vy[j], towerCeiling, minima, lookaheadSec);
+      const t = firstConflictTime(a, b, vx[i], vy[i], vx[j], vy[j], towerCeiling, pairMinima(a, b, minima), lookaheadSec);
       if (t === null) continue;
 
       a.conflictWarning = true;
