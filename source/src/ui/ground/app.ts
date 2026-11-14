@@ -5,7 +5,8 @@
 import { GroundSimulation, placeLabel } from '../../engine/ground/simulation.js';
 import type { GroundAircraft, GroundEvent, GroundScenario, GroundTraffic } from '../../engine/ground/types.js';
 import { turn } from '../../engine/ground/graph.js';
-import { XGND } from '../../data/ground/practice.js';
+import { groundAirportFor } from '../../data/ground/index.js';
+import type { GroundAirport } from '../../engine/ground/types.js';
 import { parseGroundCommand } from '../../commands/groundParser.js';
 import { GroundView } from './view.js';
 
@@ -65,6 +66,7 @@ interface Els {
 export class GroundApp {
   private sim: GroundSimulation;
   private view: GroundView;
+  private airport: GroundAirport = groundAirportFor('xdem');
   private trafficId = 'normal';
   private seed = 1;
   private selectedId: number | null = null;
@@ -81,7 +83,7 @@ export class GroundApp {
   constructor(private readonly el: Els) {
     buildTicks(el.dialTicks);
     this.sim = this.newSim();
-    this.view = new GroundView(el.canvas, XGND, this.sim.graph);
+    this.view = new GroundView(el.canvas, this.airport, this.sim.graph);
     this.wire();
     new ResizeObserver(() => this.view.resize()).observe(el.canvas);
   }
@@ -104,7 +106,7 @@ export class GroundApp {
     this.seed = Math.floor(Math.random() * 1_000_000) + 1;
     const scenario: GroundScenario = {
       seed: this.seed,
-      airport: XGND,
+      airport: this.airport,
       traffic: (GROUND_TRAFFIC.find((t) => t.id === this.trafficId) ?? GROUND_TRAFFIC[1]).traffic,
       windVariable: true,
     };
@@ -113,7 +115,7 @@ export class GroundApp {
 
   private restart(): void {
     this.sim = this.newSim();
-    this.view = new GroundView(this.el.canvas, XGND, this.sim.graph);
+    this.view = new GroundView(this.el.canvas, this.airport, this.sim.graph);
     this.selectedId = null;
     this.building = null;
     this.preview = null;
@@ -126,7 +128,7 @@ export class GroundApp {
     this.lastPanel = 0;
     const w = this.sim.getState().wind;
     this.logMsg(
-      `Practice field ground, ${this.trafficId} traffic, seed ${this.seed}. Wind ${String(Math.round(w.direction)).padStart(3, '0')}° ${Math.round(w.speed)} kt, runway ${this.sim.getState().runway} in use.`,
+      `${this.airport.icao === 'XGND' ? 'Practice field' : this.airport.name} ground, ${this.trafficId} traffic, seed ${this.seed}. Wind ${String(Math.round(w.direction)).padStart(3, '0')}° ${Math.round(w.speed)} kt, runway ${this.sim.getState().runway} in use.`,
     );
     this.setSpeed(1);
   }
@@ -323,14 +325,14 @@ export class GroundApp {
 
   /** Directions it can face after pushback (along the apron taxilane). */
   private pushFaces(ac: GroundAircraft): ('E' | 'W' | 'N' | 'S')[] {
-    const stand = XGND.stands.find((s) => s.id === ac.stand);
+    const stand = this.airport.stands.find((s) => s.id === ac.stand);
     if (!stand) return [];
     const faces = { N: 0, E: 90, S: 180, W: 270 } as const;
     const out: ('E' | 'W' | 'N' | 'S')[] = [];
     for (const f of ['E', 'W', 'N', 'S'] as const) {
       const ok = this.sim.graph
         .neighbors(stand.pushNode)
-        .some((n) => (n.edge.kind === 'taxilane' || n.edge.kind === 'link') && turn(n.bearing, faces[f]) < 30);
+        .some((n) => (n.edge.kind === 'taxilane' || n.edge.kind === 'link') && turn(n.bearing, faces[f]) < 50);
       if (ok) out.push(f);
     }
     return out;
@@ -394,8 +396,9 @@ export class GroundApp {
 
   private wire(): void {
     const { canvas, form, input } = this.el;
-    canvas.addEventListener('pointerdown', (ev) => {
-      ev.preventDefault();
+    // A click selects an aircraft or adds a route point; dragging pans; the wheel zooms.
+    let press: { x: number; y: number; id: number; dragged: boolean } | null = null;
+    const click = (ev: { clientX: number; clientY: number }) => {
       if (this.building) {
         const node = this.view.pickNode(ev.clientX, ev.clientY);
         if (node) {
@@ -405,11 +408,51 @@ export class GroundApp {
       }
       const id = this.view.pickAircraft(ev.clientX, ev.clientY);
       if (id !== null || !this.building) this.select(id);
+    };
+    canvas.addEventListener('pointerdown', (ev) => {
+      ev.preventDefault();
+      press = { x: ev.clientX, y: ev.clientY, id: ev.pointerId, dragged: false };
+      try {
+        canvas.setPointerCapture(ev.pointerId);
+      } catch {
+        // not every environment can capture
+      }
     });
     canvas.addEventListener('pointermove', (ev) => {
+      if (press && press.id === ev.pointerId) {
+        const dx = ev.clientX - press.x;
+        const dy = ev.clientY - press.y;
+        if (press.dragged || Math.hypot(dx, dy) > 5) {
+          press.dragged = true;
+          this.view.panBy(ev.movementX ?? dx, ev.movementY ?? dy);
+          canvas.style.cursor = 'grabbing';
+          return;
+        }
+      }
       const over = this.building ? this.view.pickNode(ev.clientX, ev.clientY) !== null : this.view.pickAircraft(ev.clientX, ev.clientY) !== null;
       canvas.style.cursor = over ? 'pointer' : 'default';
     });
+    const release = (ev: PointerEvent, cancelled: boolean) => {
+      if (!press || press.id !== ev.pointerId) return;
+      const wasDrag = press.dragged;
+      press = null;
+      if (!wasDrag && !cancelled) click(ev);
+    };
+    canvas.addEventListener('pointerup', (ev) => release(ev, false));
+    canvas.addEventListener('pointercancel', (ev) => release(ev, true));
+    canvas.addEventListener(
+      'wheel',
+      (ev) => {
+        ev.preventDefault();
+        this.view.zoomAt(ev.clientX, ev.clientY, Math.exp(-ev.deltaY * (ev.ctrlKey ? 0.01 : 0.0015)));
+      },
+      { passive: false },
+    );
+    canvas.addEventListener('dblclick', (ev) => {
+      ev.preventDefault();
+      this.view.zoomAt(ev.clientX, ev.clientY, 1.8);
+    });
+    this.addZoomButtons();
     form.addEventListener('submit', (ev) => {
       ev.preventDefault();
       let text = input.value.trim();
@@ -428,9 +471,31 @@ export class GroundApp {
     this.el.newGame.addEventListener('click', () => this.restart());
   }
 
+  /** + / - / fit buttons over the map (the wheel and a double click also zoom; drag to pan). */
+  private addZoomButtons(): void {
+    const host = this.el.canvas.parentElement;
+    if (!host || host.querySelector('.g-zoom')) return;
+    const box = document.createElement('div');
+    box.className = 'g-zoom';
+    const mk = (text: string, title: string, run: () => void) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = text;
+      b.title = title;
+      b.setAttribute('aria-label', title);
+      b.addEventListener('click', run);
+      box.append(b);
+    };
+    mk('+', 'Zoom in', () => this.view.zoomCentre(1.5));
+    mk('\u2212', 'Zoom out', () => this.view.zoomCentre(1 / 1.5));
+    mk('Fit', 'Whole airport', () => this.view.fit());
+    host.append(box);
+  }
+
   /** A new session at the given traffic level (chosen on the main menu). */
-  start(trafficId: string): void {
+  start(trafficId: string, mapId = 'xdem'): void {
     this.trafficId = GROUND_TRAFFIC.some((t) => t.id === trafficId) ? trafficId : 'normal';
+    this.airport = groundAirportFor(mapId);
     this.restart();
   }
 

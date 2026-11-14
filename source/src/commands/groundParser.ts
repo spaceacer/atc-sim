@@ -13,8 +13,8 @@ import type { GroundCommand } from '../engine/ground/types.js';
 export type GroundParseResult = { ok: true; callsign: string; commands: GroundCommand[] } | { ok: false; error: string };
 
 const CALLSIGN_RE = /^[A-Z]{2,3}\d{1,4}[A-Z]?$/;
-const PLACE_RE = /^[A-Z]\d{1,2}$/;
-const TAXIWAY_RE = /^[A-Z]\d{0,2}$/;
+const PLACE_RE = /^[A-Z]{1,2}\d{0,2}[A-Z]?$/;
+const TAXIWAY_RE = /^([A-Z]\d{0,2}[A-Z]?|LINK\d)$/;
 
 export function parseGroundCommand(input: string): GroundParseResult {
   const tokens = input.trim().toUpperCase().split(/\s+/).filter(Boolean);

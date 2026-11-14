@@ -26,7 +26,7 @@ export const MAPS: readonly MapInfo[] = [
     airport: VABB,
     code: 'VABB',
     blurb: 'Two crossing runways, 09/27 and 14/32. Busy mixed traffic.',
-    modes: ['approach'],
+    modes: ['approach', 'ground'],
   },
   {
     id: 'xdem',

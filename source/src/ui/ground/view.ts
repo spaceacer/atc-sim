@@ -42,6 +42,11 @@ export function setGroundPalette(p: GroundPalette): void {
 
 const FONT = '"JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace';
 const MARGIN = 18;
+const MIN_ZOOM = 0.9;
+const MAX_ZOOM = 10;
+/** Stand and connector names show from this zoom (1 = the whole airport). */
+const STAND_LABEL_ZOOM = 2.2;
+const CONNECTOR_LABEL_ZOOM = 1.5;
 const TAXI_WIDTH_M = 23;
 /** Approximate wingspans for drawing, m. */
 const SPAN: Record<string, number> = { AT76: 27, DH8D: 28, CRJ9: 25, E75L: 28, B77W: 65, B788: 60, B789: 60, A333: 60, A359: 65 };
@@ -53,6 +58,11 @@ export class GroundView {
   private h = 1;
   private dpr = 1;
   private scale = 1; // px per m
+  private fitScale = 1;
+  /** World point at the middle of the canvas, m. */
+  private cx: number;
+  private cy: number;
+  private dirty = true;
   private hits: { id: number; x: number; y: number; bx: number; by: number; bw: number; bh: number }[] = [];
   runway = '27';
 
@@ -65,34 +75,86 @@ export class GroundView {
     if (!ctx) throw new Error('Canvas 2D not available');
     this.ctx = ctx;
     this.layer = document.createElement('canvas');
+    this.cx = airport.centerX ?? 0;
+    this.cy = airport.centerY ?? 0;
     this.resize();
   }
 
   resize(): void {
     const r = this.canvas.getBoundingClientRect();
     this.dpr = window.devicePixelRatio || 1;
+    const zoomRel = this.scale / this.fitScale;
     this.w = Math.max(1, r.width);
     this.h = Math.max(1, r.height);
     for (const c of [this.canvas, this.layer]) {
       c.width = Math.round(this.w * this.dpr);
       c.height = Math.round(this.h * this.dpr);
     }
-    this.scale = Math.max(1e-4, Math.min((this.w - 2 * MARGIN) / (2 * this.airport.halfWidth), (this.h - 2 * MARGIN) / (2 * this.airport.halfHeight)));
-    this.drawStatic();
+    this.fitScale = Math.max(1e-4, Math.min((this.w - 2 * MARGIN) / (2 * this.airport.halfWidth), (this.h - 2 * MARGIN) / (2 * this.airport.halfHeight)));
+    this.scale = this.fitScale * (Number.isFinite(zoomRel) && zoomRel > 0 ? zoomRel : 1);
+    this.dirty = true;
+  }
+
+  /** Zoom about a screen point (client coordinates); 1 = the whole airport. */
+  zoomAt(clientX: number, clientY: number, factor: number): void {
+    const r = this.canvas.getBoundingClientRect();
+    const px = clientX - r.left;
+    const py = clientY - r.top;
+    this.zoomAtPx(px, py, factor);
+  }
+
+  zoomCentre(factor: number): void {
+    this.zoomAtPx(this.w / 2, this.h / 2, factor);
+  }
+
+  private zoomAtPx(px: number, py: number, factor: number): void {
+    const before = { x: this.wx(px), y: this.wy(py) };
+    this.scale = Math.max(this.fitScale * MIN_ZOOM, Math.min(this.fitScale * MAX_ZOOM, this.scale * factor));
+    // Keep the point under the pointer where it was.
+    this.cx = before.x - (px - this.w / 2) / this.scale;
+    this.cy = before.y + (py - this.h / 2) / this.scale;
+    this.dirty = true;
+  }
+
+  panBy(dxPx: number, dyPx: number): void {
+    this.cx -= dxPx / this.scale;
+    this.cy += dyPx / this.scale;
+    this.dirty = true;
+  }
+
+  /** Back to the whole airport. */
+  fit(): void {
+    this.scale = this.fitScale;
+    this.cx = this.airport.centerX ?? 0;
+    this.cy = this.airport.centerY ?? 0;
+    this.dirty = true;
+  }
+
+  /** Zoom level relative to the whole airport. */
+  get zoom(): number {
+    return this.scale / this.fitScale;
   }
 
   setRunway(id: string): void {
     if (id === this.runway) return;
     this.runway = id;
-    this.drawStatic();
+    this.dirty = true;
   }
 
   sx(x: number): number {
-    return this.w / 2 + x * this.scale;
+    return this.w / 2 + (x - this.cx) * this.scale;
   }
 
   sy(y: number): number {
-    return this.h / 2 - y * this.scale;
+    return this.h / 2 - (y - this.cy) * this.scale;
+  }
+
+  private wx(px: number): number {
+    return this.cx + (px - this.w / 2) / this.scale;
+  }
+
+  private wy(py: number): number {
+    return this.cy - (py - this.h / 2) / this.scale;
   }
 
   /** Aircraft under the pointer, or null. */
@@ -124,7 +186,7 @@ export class GroundView {
     const py = clientY - r.top;
     let best: string | null = null;
     let bestD = 22;
-    for (const n of this.airport.nodes) {
+    for (const n of this.graph.nodes.values()) {
       if (n.onRunway) continue;
       const d = Math.hypot(this.sx(n.x) - px, this.sy(n.y) - py);
       if (d < bestD) {
@@ -137,6 +199,10 @@ export class GroundView {
 
   render(state: GroundState, selectedId: number | null, preview: readonly string[] | null, nextArrivalNm: number | null): void {
     const ctx = this.ctx;
+    if (this.dirty) {
+      this.dirty = false;
+      this.drawStatic();
+    }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.drawImage(this.layer, 0, 0);
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
@@ -158,65 +224,81 @@ export class GroundView {
     const ctx = this.layer.getContext('2d');
     if (!ctx) return;
     const a = this.airport;
+    const g = this.graph;
+    const z = this.zoom;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.fillStyle = C.bg;
     ctx.fillRect(0, 0, this.w, this.h);
     ctx.fillStyle = C.grass;
-    ctx.fillRect(this.sx(-a.halfWidth), this.sy(a.halfHeight), 2 * a.halfWidth * this.scale, 2 * a.halfHeight * this.scale);
+    ctx.fillRect(this.sx(this.cx - a.halfWidth), this.sy(this.cy + a.halfHeight), 2 * a.halfWidth * this.scale, 2 * a.halfHeight * this.scale);
 
-    // Pavement: every taxi edge as a thick line, aprons a little wider.
+    // Pavement: every taxi edge as a thick line, aprons a little wider. A runway not in use
+    // is a taxiway here too (the runway itself is drawn over it below).
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    for (const e of a.edges) {
+    for (const e of g.edges) {
       if (e.kind === 'runway') continue;
-      const p = this.graph.node(e.a);
-      const q = this.graph.node(e.b);
+      const p = g.node(e.a);
+      const q = g.node(e.b);
       ctx.strokeStyle = e.kind === 'taxilane' || e.kind === 'stand' ? C.apron : C.pavement;
-      ctx.lineWidth = Math.max(3, (e.kind === 'taxilane' ? 40 : e.kind === 'stand' ? 30 : TAXI_WIDTH_M) * this.scale);
+      ctx.lineWidth = Math.max(2, (e.kind === 'taxilane' ? 40 : e.kind === 'stand' ? 30 : TAXI_WIDTH_M) * this.scale);
       ctx.beginPath();
       ctx.moveTo(this.sx(p.x), this.sy(p.y));
       ctx.lineTo(this.sx(q.x), this.sy(q.y));
       ctx.stroke();
     }
 
-    // Runway.
-    const r27 = a.runways[0];
-    const r09 = a.runways.find((r) => r.id === r27.oppositeId) ?? a.runways[1];
-    const half = (a.runwayWidth / 2) * this.scale;
-    const x1 = this.sx(Math.min(r27.thresholdX, r09.thresholdX));
-    const x2 = this.sx(Math.max(r27.thresholdX, r09.thresholdX));
-    const y0 = this.sy(0);
-    ctx.fillStyle = C.runway;
-    ctx.fillRect(x1, y0 - half, x2 - x1, 2 * half);
-    ctx.strokeStyle = C.runwayEdge;
-    ctx.lineWidth = 1;
-    ctx.strokeRect(x1 + 0.5, y0 - half + 0.5, x2 - x1 - 1, 2 * half - 1);
+    // Runways: all runway pavement, the one in use brighter.
+    const inUse = a.runways.find((r) => r.id === this.runway)?.name;
+    const rw = Math.max(4, a.runwayWidth * this.scale);
+    ctx.lineCap = 'butt';
+    for (const e of a.edges) {
+      if (e.kind !== 'runway') continue;
+      const p = g.node(e.a);
+      const q = g.node(e.b);
+      ctx.strokeStyle = C.runway;
+      ctx.lineWidth = rw;
+      ctx.beginPath();
+      ctx.moveTo(this.sx(p.x), this.sy(p.y));
+      ctx.lineTo(this.sx(q.x), this.sy(q.y));
+      ctx.stroke();
+    }
     ctx.setLineDash([10, 8]);
     ctx.strokeStyle = C.centre;
-    ctx.beginPath();
-    ctx.moveTo(x1 + 30, y0);
-    ctx.lineTo(x2 - 30, y0);
-    ctx.stroke();
+    ctx.lineWidth = 1;
+    for (const e of a.edges) {
+      if (e.kind !== 'runway') continue;
+      const p = g.node(e.a);
+      const q = g.node(e.b);
+      ctx.beginPath();
+      ctx.moveTo(this.sx(p.x), this.sy(p.y));
+      ctx.lineTo(this.sx(q.x), this.sy(q.y));
+      ctx.stroke();
+    }
     ctx.setLineDash([]);
+    // Runway outlines and numbers at the ends.
     ctx.font = `600 13px ${FONT}`;
-    ctx.fillStyle = C.centre;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     for (const r of a.runways) {
-      const inUse = r.id === this.runway;
-      const x = this.sx(r.thresholdX) + (r.thresholdX > 0 ? -16 : 16);
-      ctx.fillStyle = inUse ? C.hold : C.centre;
-      ctx.fillText(r.id, x, y0);
+      const live = r.id === this.runway;
+      const dir = (r.heading * Math.PI) / 180;
+      const lx = r.thresholdX - Math.sin(dir) * 70;
+      const ly = r.thresholdY - Math.cos(dir) * 70;
+      ctx.fillStyle = live ? C.hold : C.centre;
+      ctx.globalAlpha = live || !inUse ? 1 : 0.7;
+      ctx.fillText(r.id, this.sx(lx), this.sy(ly));
+      ctx.globalAlpha = 1;
     }
 
     // Taxi centrelines.
     ctx.strokeStyle = C.taxiLine;
     ctx.lineWidth = 1;
     ctx.globalAlpha = 0.7;
-    for (const e of a.edges) {
-      if (e.kind === 'runway') continue;
-      const p = this.graph.node(e.a);
-      const q = this.graph.node(e.b);
+    for (const e of g.edges) {
+      if (e.kind === 'runway' || e.rwy) continue;
+      const p = g.node(e.a);
+      const q = g.node(e.b);
       ctx.beginPath();
       ctx.moveTo(this.sx(p.x), this.sy(p.y));
       ctx.lineTo(this.sx(q.x), this.sy(q.y));
@@ -227,50 +309,72 @@ export class GroundView {
     // Holding positions: amber bars across the connector.
     ctx.strokeStyle = C.hold;
     ctx.lineWidth = 2;
-    for (const n of a.nodes) {
+    for (const n of g.nodes.values()) {
       if (!n.holdShort) continue;
+      // Across the way in: perpendicular to the leg toward the runway.
+      const nb = g.neighbors(n.id).find((x) => g.node(x.to).onRunway) ?? g.neighbors(n.id)[0];
+      const brg = nb ? (nb.bearing * Math.PI) / 180 : Math.PI / 2;
       const w = Math.max(6, 18 * this.scale);
+      const ux = Math.cos(brg) * w;
+      const uy = -Math.sin(brg) * w;
       ctx.beginPath();
-      ctx.moveTo(this.sx(n.x) - w, this.sy(n.y));
-      ctx.lineTo(this.sx(n.x) + w, this.sy(n.y));
+      ctx.moveTo(this.sx(n.x) - ux, this.sy(n.y) - uy);
+      ctx.lineTo(this.sx(n.x) + ux, this.sy(n.y) + uy);
       ctx.stroke();
     }
 
-    // Taxiway names, once per name, at the middle edge of each name.
+    // Taxiway names, once per name, at the middle edge of each name. Apron lanes and
+    // connectors only when zoomed in.
     ctx.font = `11px ${FONT}`;
-    ctx.fillStyle = C.label;
-    const byName = new Map<string, typeof a.edges>();
-    for (const e of a.edges) {
-      if (e.kind === 'runway' || e.kind === 'stand') continue;
+    const byName = new Map<string, typeof g.edges>();
+    for (const e of g.edges) {
+      if (e.kind === 'runway' || e.kind === 'stand' || e.rwy) continue;
+      if (e.kind !== 'taxiway' && z < CONNECTOR_LABEL_ZOOM) continue;
       byName.set(e.name, [...(byName.get(e.name) ?? []), e]);
     }
     for (const [name, list] of byName) {
-      const e = list[Math.floor(list.length / 2)];
-      const p = this.graph.node(e.a);
-      const q = this.graph.node(e.b);
-      const mx = (p.x + q.x) / 2;
-      const my = (p.y + q.y) / 2;
-      const vertical = Math.abs(q.x - p.x) < Math.abs(q.y - p.y);
-      const tx = this.sx(mx) + (vertical ? 12 : 0);
-      const ty = this.sy(my) + (vertical ? 0 : -10);
-      this.labelBox(ctx, name, tx, ty);
+      // Longer taxiways get a label on a couple of legs.
+      const picks = list.length > 8 ? [list[Math.floor(list.length / 4)], list[Math.floor((3 * list.length) / 4)]] : [list[Math.floor(list.length / 2)]];
+      for (const e of picks) {
+        const p = g.node(e.a);
+        const q = g.node(e.b);
+        const mx = (p.x + q.x) / 2;
+        const my = (p.y + q.y) / 2;
+        const vertical = Math.abs(q.x - p.x) < Math.abs(q.y - p.y);
+        const tx = this.sx(mx) + (vertical ? 12 : 0);
+        const ty = this.sy(my) + (vertical ? 0 : -10);
+        if (tx < -20 || ty < -20 || tx > this.w + 20 || ty > this.h + 20) continue;
+        this.labelBox(ctx, name, tx, ty);
+      }
     }
 
-    // Stands.
+    // Stands: a dot (and the name once zoomed in).
     ctx.font = `600 11px ${FONT}`;
+    const showNames = z >= STAND_LABEL_ZOOM;
     for (const s of a.stands) {
-      const n = this.graph.node(s.id);
+      const n = g.node(s.id);
       ctx.strokeStyle = C.stand;
       ctx.lineWidth = 1;
-      const r = Math.max(5, 22 * this.scale);
-      ctx.strokeRect(this.sx(n.x) - r, this.sy(n.y) - r, 2 * r, 2 * r);
       ctx.fillStyle = C.stand;
-      ctx.fillText(s.id, this.sx(n.x), this.sy(n.y) + (s.cargo ? r + 10 : -r - 9));
+      const px = this.sx(n.x);
+      const py = this.sy(n.y);
+      if (px < -20 || py < -20 || px > this.w + 20 || py > this.h + 20) continue;
+      if (!showNames) {
+        ctx.beginPath();
+        ctx.arc(px, py, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+        continue;
+      }
+      const r = Math.max(5, 22 * this.scale);
+      ctx.strokeRect(px - r, py - r, 2 * r, 2 * r);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(s.id, px, py + (s.cargo ? r + 10 : -r - 9));
     }
 
     // North arrow, top right.
-    const nx = this.sx(a.halfWidth) - 22;
-    const ny = this.sy(a.halfHeight) + 30;
+    const nx = this.w - 40;
+    const ny = 38;
     ctx.fillStyle = C.label;
     ctx.beginPath();
     ctx.moveTo(nx, ny - 14);
@@ -286,11 +390,40 @@ export class GroundView {
     ctx.textAlign = 'left';
     ctx.font = `600 11px ${FONT}`;
     ctx.fillStyle = C.label;
-    ctx.fillText(`${a.icao}  GROUND`, this.sx(-a.halfWidth) + 10, this.sy(a.halfHeight) + 16);
-    ctx.font = `11px ${FONT}`;
-    ctx.fillText('Terminal apron', this.sx(-1750), this.sy(330) + 4);
-    ctx.fillText('Cargo apron', this.sx(-1750), this.sy(-330) + 4);
+    ctx.fillText(`${a.icao}  GROUND${z > 1.05 ? `   zoom ${z.toFixed(1)}x` : ''}`, 12, 20);
+    if (a.icao === 'XGND') {
+      ctx.font = `11px ${FONT}`;
+      ctx.fillText('Terminal apron', this.sx(-1750), this.sy(330) + 4);
+      ctx.fillText('Cargo apron', this.sx(-1750), this.sy(-330) + 4);
+    } else {
+      this.drawApronNames(ctx);
+    }
     ctx.textAlign = 'center';
+  }
+
+  /** Apron names in the middle of each apron (VABB). */
+  private drawApronNames(ctx: CanvasRenderingContext2D): void {
+    ctx.font = `600 12px ${FONT}`;
+    ctx.fillStyle = C.label;
+    ctx.globalAlpha = 0.85;
+    ctx.textAlign = 'center';
+    const group = new Map<string, { x: number; y: number; n: number }>();
+    for (const s of this.airport.stands) {
+      const apron = apronOf(s.id);
+      const n = this.graph.node(s.id);
+      const gr = group.get(apron) ?? { x: 0, y: 0, n: 0 };
+      gr.x += n.x;
+      gr.y += n.y;
+      gr.n++;
+      group.set(apron, gr);
+    }
+    for (const [apron, gr] of group) {
+      const x = this.sx(gr.x / gr.n);
+      const y = this.sy(gr.y / gr.n);
+      if (x < 0 || y < 0 || x > this.w || y > this.h) continue;
+      ctx.fillText(APRON_NAMES[apron] ?? `Apron ${apron}`, x, y - 28 * Math.min(1, this.zoom));
+    }
+    ctx.globalAlpha = 1;
   }
 
   private labelBox(ctx: CanvasRenderingContext2D, text: string, x: number, y: number): void {
@@ -331,26 +464,42 @@ export class GroundView {
     ctx.fill();
   }
 
-  /** Next arrival on final: a chevron at the map edge with its distance. */
+  /** Next arrival on final: a chevron on the extended centreline at the edge of the view, with its distance. */
   private drawFinalMarker(nm: number): void {
     const ctx = this.ctx;
     const rwy = this.airport.runways.find((r) => r.id === this.runway);
     if (!rwy) return;
-    const east = rwy.thresholdX > 0; // 27 is approached from the east
-    const x = this.sx(east ? this.airport.halfWidth : -this.airport.halfWidth) + (east ? -8 : 8);
-    const y = this.sy(0);
+    const dir = (rwy.heading * Math.PI) / 180;
+    // Walk back along the approach until the point leaves the canvas.
+    const ux = -Math.sin(dir);
+    const uy = -Math.cos(dir);
+    let d = 0;
+    const step = 20;
+    while (d < 20000) {
+      const px = this.sx(rwy.thresholdX + ux * d);
+      const py = this.sy(rwy.thresholdY + uy * d);
+      if (px < 28 || py < 28 || px > this.w - 28 || py > this.h - 28) break;
+      d += step;
+    }
+    const x = this.sx(rwy.thresholdX + ux * d);
+    const y = this.sy(rwy.thresholdY + uy * d);
+    const ang = Math.atan2(-uy, -ux); // pointing toward the runway (screen y is flipped)
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(ang);
     ctx.fillStyle = C.arrival;
     ctx.beginPath();
-    const d = east ? -1 : 1;
-    ctx.moveTo(x, y);
-    ctx.lineTo(x - d * 10, y - 7);
-    ctx.lineTo(x - d * 10, y + 7);
+    ctx.moveTo(10, 0);
+    ctx.lineTo(-4, -7);
+    ctx.lineTo(-4, 7);
     ctx.closePath();
     ctx.fill();
+    ctx.restore();
     ctx.font = `11px ${FONT}`;
-    ctx.textAlign = east ? 'right' : 'left';
+    ctx.fillStyle = C.arrival;
+    ctx.textAlign = x > this.w / 2 ? 'right' : 'left';
     ctx.textBaseline = 'alphabetic';
-    ctx.fillText(`final ${nm.toFixed(1)} nm`, x - d * 14, y - 12);
+    ctx.fillText(`final ${nm.toFixed(1)} nm`, x + (x > this.w / 2 ? -12 : 12), y - 10);
   }
 
   private drawAircraft(ac: GroundAircraft, selected: boolean): void {
@@ -404,6 +553,21 @@ export class GroundView {
     lines.forEach((l, i) => ctx.fillText(l, bx, by + i * 13));
     this.hits.push({ id: ac.id, x, y, bx, by: by - 11, bw, bh: 28 });
   }
+}
+
+const APRON_NAMES: Record<string, string> = {
+  A: 'Apron A  (Terminal 1)',
+  C: 'Apron C',
+  G: 'Apron G  (cargo)',
+  S: 'Apron S',
+  V: 'Apron V  (Terminal 2)',
+  K: 'Apron K',
+  R: 'Apron R',
+  J: 'Apron J',
+};
+
+function apronOf(standId: string): string {
+  return standId.charAt(0);
 }
 
 /** Short status for the label. */

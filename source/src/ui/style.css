@@ -1614,3 +1614,29 @@ h3,
     display: none;
   }
 }
+
+/* Ground map zoom buttons */
+.g-zoom {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 3;
+}
+.g-zoom button {
+  min-width: 34px;
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--scope-line);
+  border-radius: 8px;
+  background: var(--scope-veil);
+  color: var(--scope-text);
+  font: 600 14px var(--mono, monospace);
+  cursor: pointer;
+}
+.g-zoom button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}

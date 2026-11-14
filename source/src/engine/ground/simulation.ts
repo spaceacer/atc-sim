@@ -107,6 +107,8 @@ export class GroundSimulation {
   private lastTakeoffCategory: WeightCategory = 'light';
   private conflictPairs = new Set<string>();
   private usedCallsigns = new Set<string>();
+  /** The runway the wind calls for; with crossing runways the switch waits until both are empty. */
+  private wantRunway: string;
 
   constructor(scenario: GroundScenario) {
     this.scenario = scenario;
@@ -115,14 +117,17 @@ export class GroundSimulation {
     this.rng = createRng(scenario.seed);
     this.weatherRng = createRng((scenario.seed ^ WEATHER_SALT) >>> 0);
     const wind = initialWind({ variable: scenario.windVariable, initialWind: scenario.initialWind }, this.weatherRng);
+    const first = this.bestRunway(wind, null);
+    this.graph.setRunway(this.airport.runways.find((r) => r.id === first)?.name);
     this.state = {
       tick: 0,
       time: 0,
       wind,
-      runway: this.bestRunway(wind, null),
+      runway: first,
       aircraft: [],
       stats: { score: 0, departed: 0, parked: 0, conflicts: 0, goArounds: 0, taxiOutSec: 0, taxiInSec: 0, commandsIssued: 0 },
     };
+    this.wantRunway = first;
     this.nextDeparture = Math.round(scenario.traffic.departures.firstSec / GROUND_DT);
     this.nextArrival = Math.round(scenario.traffic.arrivals.firstSec / GROUND_DT);
   }
@@ -149,6 +154,24 @@ export class GroundSimulation {
     return this.airport.runways.find((r) => r.id === id) ?? this.airport.runways[0];
   }
 
+  /** A runway change is pending, waiting for the runways to empty. */
+  get switchPending(): boolean {
+    return this.wantRunway !== this.state.runway;
+  }
+
+  /**
+   * Switching between crossing runways needs both clear of traffic. Single-runway
+   * airports switch at once (arrivals re-position onto the other end's final).
+   */
+  private canSwitch(): boolean {
+    if (!this.graph.multiRunway) return true;
+    for (const a of this.state.aircraft) {
+      if (a.status === 'final' || a.status === 'landing' || a.status === 'lineup' || a.status === 'takeoff') return false;
+      for (const id of [a.node, a.next]) if (id && this.graph.node(id).rwys) return false;
+    }
+    return true;
+  }
+
   // -------------------------------------------------------------------------
   // Tick
 
@@ -158,20 +181,22 @@ export class GroundSimulation {
 
     if (this.scenario.windVariable && tick > 0 && tick % Math.round(WIND_UPDATE_SEC / GROUND_DT) === 0) {
       updateWind(s.wind, this.weatherRng);
-      const rwy = this.bestRunway(s.wind, s.runway);
-      if (rwy !== s.runway) {
-        s.runway = rwy;
-        this.events.push({ type: 'runwayChanged', tick, runway: rwy });
-        for (const ac of s.aircraft) {
-          if (ac.status !== 'handoff') continue;
-          const dp = ac.node ? this.departurePoint(ac, ac.node) : null;
-          if (dp?.ok) {
-            ac.lineupNode = dp.runwayNode;
-            continue;
-          }
-          ac.status = 'taxi';
-          this.events.push({ type: 'wrongHoldingPoint', tick, callsign: ac.callsign, at: placeLabel(ac.node ?? ''), runway: rwy, reason: dp?.why ?? 'not a departure point' });
+      this.wantRunway = this.bestRunway(s.wind, s.runway);
+    }
+    if (this.wantRunway !== s.runway && this.canSwitch()) {
+      const rwy = this.wantRunway;
+      s.runway = rwy;
+      this.graph.setRunway(this.runwayEnd(rwy).name);
+      this.events.push({ type: 'runwayChanged', tick, runway: rwy });
+      for (const ac of s.aircraft) {
+        if (ac.status !== 'handoff') continue;
+        const dp = ac.node ? this.departurePoint(ac, ac.node) : null;
+        if (dp?.ok) {
+          ac.lineupNode = dp.runwayNode;
+          continue;
         }
+        ac.status = 'taxi';
+        this.events.push({ type: 'wrongHoldingPoint', tick, callsign: ac.callsign, at: placeLabel(ac.node ?? ''), runway: rwy, reason: dp?.why ?? 'not a departure point' });
       }
     }
 
@@ -312,7 +337,7 @@ export class GroundSimulation {
         const along = this.graph
           .neighbors(stand.pushNode)
           .filter((n) => n.edge.kind === 'taxilane' || n.edge.kind === 'link')
-          .some((n) => turn(n.bearing, face) < 30);
+          .some((n) => turn(n.bearing, face) < 50);
         if (!along) return { ok: false, message: `${cs} cannot face ${cmd.face} after pushback from ${stand.id}` };
         ac.status = 'pushback';
         ac.node = stand.id;
@@ -535,13 +560,15 @@ export class GroundSimulation {
     const h = this.graph.node(hold);
     if (!h.holdShort) return null;
     const rnb = this.graph.neighbors(hold).find((n) => this.graph.node(n.to).onRunway);
-    if (!rnb) return null;
+    if (!rnb || this.graph.node(rnb.to).crossing) return null;
     const rwy = this.runwayEnd();
     const far = this.runwayEnd(rwy.oppositeId);
     const s0 = this.alongRunway(rwy, this.graph.node(rnb.to));
-    const remaining = Math.round(this.alongRunway(rwy, { x: far.thresholdX, y: far.thresholdY }) - Math.max(0, s0));
+    const endAt = this.alongRunway(rwy, { x: rwy.endX ?? far.thresholdX, y: rwy.endY ?? far.thresholdY });
+    // A line-up before the threshold (a full-length start) counts from the start of the pavement.
+    const remaining = Math.round(endAt - (rwy.endX === undefined ? Math.max(0, s0) : s0));
     const intersection = rnb.to !== rwy.lineupNode;
-    const needed = takeoffRunNeeded(ac);
+    const needed = Math.round(takeoffRunNeeded(ac) * (rwy.takeoffFactor ?? 1));
     if (remaining < 200) return { ok: false, runwayNode: rnb.to, remaining, intersection, why: `${placeLabel(hold)} is at the far end of runway ${rwy.id}` };
     if (remaining < needed) {
       return { ok: false, runwayNode: rnb.to, remaining, intersection, why: `${placeLabel(hold)} leaves ${remaining.toLocaleString('en-US')} m, ${ac.type} needs ${needed.toLocaleString('en-US')} m` };
@@ -552,7 +579,7 @@ export class GroundSimulation {
   /** Holding positions this departure could take off from on the runway in use, best (full length) first. */
   departureOptions(ac: GroundAircraft): { hold: string; remaining: number; intersection: boolean }[] {
     const out: { hold: string; remaining: number; intersection: boolean }[] = [];
-    for (const n of this.airport.nodes) {
+    for (const n of this.graph.nodes.values()) {
       if (!n.holdShort) continue;
       const dp = this.departurePoint(ac, n.id);
       if (dp?.ok) out.push({ hold: n.id, remaining: dp.remaining, intersection: dp.intersection });
@@ -788,6 +815,7 @@ export class GroundSimulation {
     // Order: whoever can go soonest; on a tie the lighter type first (a heavy then follows
     // without a wake wait, the other way round costs 2 minutes); then first come, first served.
     if (eta < LINEUP_ARRIVAL_SEC) return;
+    if (this.switchPending && this.graph.multiRunway) return; // runway change: nobody new onto the runway
     // A crossing waiting at a holding position (with the far side clear) gets the next gap:
     // crossings take seconds, and lining up departures first could keep it waiting for ever.
     const crossingWaiting = s.aircraft.some((ac) => {
@@ -900,6 +928,12 @@ export class GroundSimulation {
     return (p.x - rwy.thresholdX) * Math.sin(h) + (p.y - rwy.thresholdY) * Math.cos(h);
   }
 
+  /** Which side of the runway a point is on, looking along it: 1 right, -1 left. */
+  private sideOf(rwy: GroundRunwayEnd, p: { x: number; y: number }): number {
+    const h = (rwy.heading * Math.PI) / 180;
+    return Math.sign((p.x - rwy.thresholdX) * Math.cos(h) - (p.y - rwy.thresholdY) * Math.sin(h)) || 1;
+  }
+
   private placeOnRunway(ac: GroundAircraft, rwy: GroundRunwayEnd, s: number): void {
     const h = (rwy.heading * Math.PI) / 180;
     ac.x = rwy.thresholdX + Math.sin(h) * s;
@@ -914,9 +948,9 @@ export class GroundSimulation {
     const ve = EXIT_KT * KT;
     const a = perf.rolloutDecel * KT;
     const need = TOUCHDOWN_M + (vt * vt - ve * ve) / (2 * a);
-    const standY = this.graph.node(ac.stand).y;
-    const exits = this.airport.nodes
-      .filter((n) => n.onRunway)
+    const standSide = this.sideOf(rwy, this.graph.node(ac.stand));
+    const exits = [...this.graph.nodes.values()]
+      .filter((n) => n.onRunway && !n.crossing)
       .map((n) => ({ n, s: this.alongRunway(rwy, n) }))
       .filter((e) => e.s > TOUCHDOWN_M && e.n.id !== rwy.lineupNode)
       .sort((p, q) => p.s - q.s);
@@ -927,14 +961,14 @@ export class GroundSimulation {
     for (const sameSide of [true, false]) {
       for (const e of exits) {
         if (e.s < need) continue;
-        const h = holds(e.n.id).find((h) => !sameSide || Math.sign(this.graph.node(h.to).y) === Math.sign(standY));
+        const h = holds(e.n.id).find((h) => !sameSide || this.sideOf(rwy, this.graph.node(h.to)) === standSide);
         if (h) {
           ac.exitHold = h.to;
           return e.n.id;
         }
       }
     }
-    const last = exits[exits.length - 1].n.id;
+    const last = (exits.length > 0 ? exits[exits.length - 1] : { n: this.graph.node(rwy.lineupNode) }).n.id;
     ac.exitHold = this.graph.neighbors(last).find((nb) => this.graph.node(nb.to).holdShort)?.to ?? null;
     return last;
   }
@@ -993,7 +1027,7 @@ export class GroundSimulation {
     if (tick >= this.nextArrival) {
       const last = Math.max(0, ...this.state.aircraft.filter((a) => a.status === 'final').map((a) => a.runwayDist));
       const stand = this.freeStand();
-      if (stand && FINAL_SPAWN_M - last >= ARRIVAL_SPACING_M) {
+      if (stand && FINAL_SPAWN_M - last >= ARRIVAL_SPACING_M && !(this.switchPending && this.graph.multiRunway)) {
         const ac = this.newAircraft(true, stand.cargo, stand.id, tick);
         ac.status = 'final';
         ac.runwayDist = FINAL_SPAWN_M;
@@ -1029,7 +1063,7 @@ export class GroundSimulation {
   }
 
   private newAircraft(isArrival: boolean, cargo: boolean, stand: string, tick: number): GroundAircraft {
-    const type = this.pickType(cargo ? this.airport.cargoFleet : this.airport.fleet);
+    const type = this.pickType(this.airport.standFleets?.[stand] ?? (cargo ? this.airport.cargoFleet : this.airport.fleet));
     const airlines = cargo ? this.airport.cargoAirlines : this.airport.airlines;
     let callsign = '';
     for (let i = 0; i < 50 && (!callsign || this.usedCallsigns.has(callsign)); i++) {

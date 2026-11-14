@@ -124,3 +124,13 @@ Notes and decisions:
 - Wording for a landed aircraft still braking: "Landed, slowing 09".
 
 Status: shipped in 0.7.0. Still open: Mumbai's real intersection names and take-off run available (needs the AIP TORA charts, AD 2 VABB, attached); light-category aircraft in the fleet (the wake rules already handle them).
+
+## Mumbai ground: follow-ups (added 0.14.0)
+
+- Taxiway code and wingspan restrictions from the colour-coded ADC (W6/W7
+  under 36 m, others by code letter): route around them or refuse.
+- Stop bars and the real hold-short lines at each crossing.
+- Tow-ways and TRP use for pushback/tow, T2 remote stands.
+- GA apron rules (small aircraft only, own taxi flow).
+- Refine geometry: curves instead of straight legs, E taxiway near the NW end
+  (now an offset line), E and E1 as separate crossing nodes, stand positions.

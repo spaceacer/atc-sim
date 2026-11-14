@@ -27,17 +27,43 @@ export interface Neighbor {
 }
 
 export class TaxiGraph {
+  /** Copies of the airport's nodes: runway flags change with the runway in use. */
   readonly nodes = new Map<string, GNode>();
   private readonly adj = new Map<string, Neighbor[]>();
   private readonly standIds: Set<string>;
+  private readonly edgesIn: readonly GEdge[];
+  /** More than one runway: the one in use is a runway, the others are taxiways. */
+  readonly multiRunway: boolean;
+  private active: string | null = null;
+  /** Edges as they are now (a runway not in use is a taxiway). */
+  edges: GEdge[] = [];
 
   constructor(airport: GroundAirport) {
     for (const n of airport.nodes) {
-      this.nodes.set(n.id, n);
+      this.nodes.set(n.id, { ...n });
       this.adj.set(n.id, []);
     }
     this.standIds = new Set(airport.stands.map((s) => s.id));
-    for (const e of airport.edges) {
+    this.edgesIn = airport.edges;
+    this.multiRunway = new Set(airport.runways.map((r) => r.name).filter(Boolean)).size > 1;
+    this.build();
+  }
+
+  /** Make `name` ("09/27") the runway in use: its nodes are runway, the others taxiway. */
+  setRunway(name: string | undefined): void {
+    if (!this.multiRunway || !name || name === this.active) return;
+    this.active = name;
+    for (const n of this.nodes.values()) {
+      if (n.rwys) n.onRunway = n.rwys.includes(name);
+      if (n.holdFor !== undefined) n.holdShort = n.holdFor === name;
+    }
+    this.build();
+  }
+
+  private build(): void {
+    for (const list of this.adj.values()) list.length = 0;
+    this.edges = this.edgesIn.map((e) => (e.kind === 'runway' && e.rwy && this.active && e.rwy !== this.active ? { ...e, kind: 'taxiway' as const } : e));
+    for (const e of this.edges) {
       const a = this.nodes.get(e.a);
       const b = this.nodes.get(e.b);
       if (!a || !b) throw new Error(`edge ${e.a}-${e.b} references a missing node`);

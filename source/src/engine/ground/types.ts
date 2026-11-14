@@ -13,6 +13,11 @@ export interface GNode {
   holdShort?: boolean;
   /** A node on the runway itself. */
   onRunway?: boolean;
+  /** Airports with several runways: the runways this node lies on, and the runway it is a holding position for. */
+  rwys?: string[];
+  holdFor?: string;
+  /** Where two runways cross: never a way off the runway, never a line-up point. */
+  crossing?: boolean;
 }
 
 export interface GEdge {
@@ -21,6 +26,8 @@ export interface GEdge {
   /** Taxiway / connector / stand name shown on the map and used in VIA. */
   name: string;
   kind: EdgeKind;
+  /** Runway pavement (kind 'runway'): which runway. Not in use, it is a taxiway. */
+  rwy?: string;
 }
 
 export interface Stand {
@@ -41,6 +48,13 @@ export interface GroundRunwayEnd {
   holdingPoint: string;
   lineupNode: string;
   oppositeId: string;
+  /** Several runways: the physical runway ("09/27"). */
+  name?: string;
+  /** Far end of the usable take-off run (default: the opposite threshold). */
+  endX?: number;
+  endY?: number;
+  /** Share of the type's take-off distance it needs here (reduced take-off weight on a short runway). Default 1. */
+  takeoffFactor?: number;
 }
 
 export interface GroundAirport {
@@ -50,6 +64,9 @@ export interface GroundAirport {
   /** Half extents of the drawn map, m. */
   halfWidth: number;
   halfHeight: number;
+  /** Centre of the drawn map (default: the origin). */
+  centerX?: number;
+  centerY?: number;
   runwayWidth: number; // m, drawn
   nodes: GNode[];
   edges: GEdge[];
@@ -59,6 +76,8 @@ export interface GroundAirport {
   cargoAirlines: string[];
   fleet?: Record<string, number>;
   cargoFleet?: Record<string, number>;
+  /** Types that use particular stands (instead of the airport fleet). */
+  standFleets?: Record<string, Record<string, number>>;
 }
 
 export type GroundStatus =

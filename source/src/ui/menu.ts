@@ -6,7 +6,7 @@
 import { Simulation } from '../engine/index.js';
 import { GroundSimulation } from '../engine/ground/simulation.js';
 import { MAPS, findMap, makeScenario, type MapInfo, type Mode } from '../data/scenarios.js';
-import { XGND } from '../data/ground/practice.js';
+import { groundAirportFor } from '../data/ground/index.js';
 import { DEFAULT_DISPLAY, Radar } from './radar.js';
 import { GroundView } from './ground/view.js';
 import { GROUND_TRAFFIC } from './ground/app.js';
@@ -453,8 +453,10 @@ export class Menu {
     const a = this.map.airport;
     const ground = this.mode === 'ground';
     if (ground) {
-      const sim = new GroundSimulation({ seed: 1, airport: XGND, traffic: GROUND_TRAFFIC[1].traffic, windVariable: false });
-      const view = new GroundView(this.canvas, XGND, sim.graph);
+      const ga = groundAirportFor(this.map.id);
+      const sim = new GroundSimulation({ seed: 1, airport: ga, traffic: GROUND_TRAFFIC[1].traffic, windVariable: false });
+      const view = new GroundView(this.canvas, ga, sim.graph);
+      view.setRunway(sim.getState().runway);
       view.render(sim.getState(), null, null, null);
     } else {
       const sim = new Simulation(makeScenario(1, this.map.id));
@@ -468,7 +470,9 @@ export class Menu {
     const pairs = new Set<string>();
     for (const r of a.runways) pairs.add([r.id, r.oppositeId].sort().join('/'));
     el('preview-facts').textContent = ground
-      ? 'Runway 09/27 · 3,500 m · Stands S1-S8, cargo C1-C4'
+      ? this.map.id === 'vabb'
+        ? `Runways 09/27 and 14/32 (one in use) · T1 and T2 aprons, C, G, K, R, S, J · ${groundAirportFor(this.map.id).stands.length} stands`
+        : 'Runway 09/27 · 3,500 m · Stands S1-S8, cargo C1-C4'
       : `Runways ${[...pairs].join(', ')} · Elevation ${a.elevation} ft · ${a.fixes.filter((f) => f.kind !== 'exit').length} fixes`;
   }
 }

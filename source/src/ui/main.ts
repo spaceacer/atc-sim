@@ -595,7 +595,7 @@ function enterSession(choice: MenuStart, file?: SessionFile): void {
     setSpeed(0);
     const g = ensureGroundApp();
     g.refresh();
-    g.start(choice.traffic);
+    g.start(choice.traffic, choice.map.id);
     g.activate();
     groundInput.focus();
   } else {

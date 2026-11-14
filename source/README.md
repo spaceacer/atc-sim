@@ -6,7 +6,7 @@ Two modes: **Approach radar** (vector, sequence and clear arrivals and
 departures) and **Ground** (push back, taxi and hold aircraft on a practice
 airport while the tower and the airborne traffic run automatically).
 
-**Version 0.13.0.** The project follows Semantic Versioning (`MAJOR.MINOR.PATCH`);
+**Version 0.14.0.** The project follows Semantic Versioning (`MAJOR.MINOR.PATCH`);
 what changed in each release is in [CHANGELOG.md](CHANGELOG.md).
 
 In the approach mode, arrivals enter from any edge of a rectangular airspace at
@@ -22,7 +22,7 @@ and a single-runway practice field.
 ## Play
 
 **No install:** play at <https://spaceacer.github.io/atc-sim/>, or double-click
-`ATC-Sim-0.13.0.html` (everything is inside that one file).
+`ATC-Sim-0.14.0.html` (everything is inside that one file).
 
 The game opens on the **main menu**: pick the airport, the position
 (**Approach radar** or **Ground**, where the airport offers it) and the
@@ -174,6 +174,12 @@ choices are remembered in the browser when it allows storage.
 
 ## Ground mode
 
+There are two ground airports. **Mumbai (VABB)** is the real layout from the
+AIP and charts: runways 09/27 and 14/32 (one in use at a time, switched with
+the wind once traffic allows), terminals 1 and 2, cargo, GA and remote stands.
+Scroll or drag to pan and zoom (buttons +, - and Fit too). The rest of this
+section describes the practice airport XGND; the same rules apply at Mumbai.
+
 You are the ground controller at a fictional practice airport (XGND): one
 3,500 m runway, 09/27, parallel taxiways A (north) and B (south), a terminal
 apron with stands S1-S8 and a cargo apron with C1-C4 south of the runway, so
@@ -275,7 +281,7 @@ every command with its tick. **Load saved session or scenario** (main menu) repl
 to the saved moment (paused), reproducing the exact state. A scenario file is the same
 format with no commands; examples are in `scenarios/`. Files record the simulator version that saved them
 (`appVersion`). Saving does not work inside the hosted claude.ai
-page (downloads are blocked there); use `ATC-Sim-0.13.0.html` or `npm run dev`.
+page (downloads are blocked there); use `ATC-Sim-0.14.0.html` or `npm run dev`.
 
 ## Python and AI training
 
@@ -415,5 +421,5 @@ On one core in this build environment (Node 22):
 
 A trained RL controller (the interface is ready); real SID/STAR and
 navigation data, coastline maps, wind drift on aircraft; in the ground mode,
-Mumbai's real layout, session saving and a Python interface; taxiways after
+session saving, a Python interface, taxiway size limits and stop bars at Mumbai; taxiways after
 landing in the approach mode.

@@ -9,6 +9,37 @@ While the major version is 0, a minor release may also change behaviour that
 saved sessions or trained agents rely on; such changes are listed under
 **Changed**.
 
+## 0.14.0 - 2026-11-14
+
+### Added
+- **Mumbai (VABB) ground mode.** Choose Mumbai in Ground mode: the whole
+  airport, built from the AIP (AD 2.8, 2.13, 2.24 charts) and the ADC/TRP
+  charts. Both runways, 09/27 (3,448 m) and 14/32 (2,871 m), terminal 1 and 2
+  aprons, cargo, general aviation and remote stands, taxiways N, M, E, F, W,
+  U, C and the T2 lanes, with crossings of both runways.
+- **Wind-driven runway switching.** One runway is in use at a time, as at the
+  real airport. When the wind favours another runway (or end), the tower
+  waits until nothing is on final, lined up, rolling or on the runways, then
+  switches. No new arrivals or line-ups start meanwhile. The inactive runway
+  is taxiable; crossing it needs the same clearance as before.
+- **Reduced take-off runs** from AIP AD 2.13: 14/32 departures use 90% of the
+  runway, intersection departures have their real distances, and every end has
+  its full-length holding point. Tests check the figures against the AIP.
+- **Pan and zoom** in ground mode: wheel, drag, double-click, and +/-/Fit
+  buttons. Stand names appear from zoom 2.2, connector names from 1.5.
+- Per-stand fleets: narrow-body only on A stands, small types on the GA apron.
+
+### Changed
+- Ground taxi graph: nodes know which runways they lie on, so holding points
+  and runway edges follow the active runway. XGND is unchanged.
+- Pushback accepts aircraft within 50 degrees of the chosen face (was 45).
+- Taxiway and holding-point names accept two letters and two digits (N11, E10).
+
+### Known simplifications
+- Curves are drawn as straight legs; stand positions are approximate.
+- Taxiway code and wingspan limits (W6/W7 under 36 m), stop bars and tow-ways
+  are not modelled. E and E1 share one crossing node.
+
 ## 0.13.0 - 2026-11-14
 
 ### Added
