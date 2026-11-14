@@ -348,6 +348,8 @@ export function applyTheme(id: ThemeId): void {
     hold: t.departure,
     label: t.dim,
     stand: t.dim,
+    building: t.ground.runway,
+    buildingEdge: t.dim,
     aircraft: t.text,
     departure: t.departure,
     arrival: t.arrival,

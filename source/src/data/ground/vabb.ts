@@ -14,6 +14,7 @@
 // Coordinates below are chart points (1 pt = 1/72 in on the A2 TRP chart, y down);
 // `m()` converts to metres, +x east, +y north, origin at the middle of runway 09/27.
 
+import { VABB_BUILDINGS } from './vabbBuildings.js';
 import type { GEdge, GNode, GroundAirport, GroundRunwayEnd, Stand } from '../../engine/ground/types.js';
 
 const PT_PER_M = 0.3775; // from the 1,200 m scale bar and the 3,448 m runway
@@ -419,6 +420,7 @@ export const VABB: GroundAirport = {
   fleet: { A20N: 30, A21N: 14, A320: 8, B738: 10, AT76: 4, E75L: 2, B788: 5, B77W: 6, A359: 3, A333: 2 },
   cargoFleet: { B77W: 3, A333: 2, B738: 2, AT76: 1 },
   standFleets,
+  buildings: VABB_BUILDINGS,
 };
 
 /** Debug: the graph in chart points for the overlay check. */

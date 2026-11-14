@@ -78,6 +78,8 @@ export interface GroundAirport {
   cargoFleet?: Record<string, number>;
   /** Types that use particular stands (instead of the airport fleet). */
   standFleets?: Record<string, Record<string, number>>;
+  /** Building outlines to draw (closed polygons, flat x, y in metres). */
+  buildings?: { name?: string; pts: number[] }[];
 }
 
 export type GroundStatus =

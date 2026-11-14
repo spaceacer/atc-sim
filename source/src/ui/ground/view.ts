@@ -7,7 +7,7 @@ import type { TaxiGraph } from '../../engine/ground/graph.js';
 import { placeLabel } from '../../engine/ground/simulation.js';
 
 export type GroundPalette = Record<
-  | 'bg' | 'grass' | 'pavement' | 'apron' | 'runway' | 'runwayEdge' | 'centre' | 'taxiLine' | 'hold' | 'label' | 'stand'
+  | 'bg' | 'grass' | 'pavement' | 'apron' | 'runway' | 'runwayEdge' | 'centre' | 'taxiLine' | 'hold' | 'label' | 'stand' | 'building' | 'buildingEdge'
   | 'aircraft' | 'departure' | 'arrival' | 'selected' | 'conflict' | 'route' | 'preview' | 'veil' | 'veilStrong',
   string
 >;
@@ -25,6 +25,8 @@ const C: GroundPalette = {
   hold: '#FFC857',
   label: '#9DB3C0',
   stand: '#7F98A6',
+  building: '#4A5A63',
+  buildingEdge: '#7F98A6',
   aircraft: '#E6EEF0',
   departure: '#F2C46D',
   arrival: '#A8E6C1',
@@ -248,6 +250,8 @@ export class GroundView {
       ctx.stroke();
     }
 
+    this.drawBuildings(ctx);
+
     // Runways: all runway pavement, the one in use brighter.
     const inUse = a.runways.find((r) => r.id === this.runway)?.name;
     const rw = Math.max(4, a.runwayWidth * this.scale);
@@ -399,6 +403,85 @@ export class GroundView {
       this.drawApronNames(ctx);
     }
     ctx.textAlign = 'center';
+  }
+
+
+  /** Jet bridges, computed once: a short line from each passenger stand to the nearest building edge. */
+  private bridges: { x1: number; y1: number; x2: number; y2: number }[] | null = null;
+
+  private computeBridges(): { x1: number; y1: number; x2: number; y2: number }[] {
+    const out: { x1: number; y1: number; x2: number; y2: number }[] = [];
+    const bl = this.airport.buildings ?? [];
+    for (const s of this.airport.stands) {
+      if (s.cargo || s.id.startsWith('J')) continue;
+      const n = this.graph.node(s.id);
+      let best = { d: 80, x: 0, y: 0 };
+      for (const b of bl) {
+        const P = b.pts;
+        for (let i = 0; i < P.length; i += 2) {
+          const j = (i + 2) % P.length;
+          const ax = P[i]!, ay = P[i + 1]!, bx = P[j]!, by = P[j + 1]!;
+          const dx = bx - ax, dy = by - ay;
+          const t = Math.max(0, Math.min(1, ((n.x - ax) * dx + (n.y - ay) * dy) / (dx * dx + dy * dy || 1)));
+          const qx = ax + t * dx, qy = ay + t * dy;
+          const d = Math.hypot(n.x - qx, n.y - qy);
+          if (d < best.d) best = { d, x: qx, y: qy };
+        }
+      }
+      if (best.d < 80 && best.d > 4) out.push({ x1: n.x, y1: n.y, x2: best.x, y2: best.y });
+    }
+    return out;
+  }
+
+  /** Building outlines (soft fill, smoothed perimeter) and jet bridges. */
+  private drawBuildings(ctx: CanvasRenderingContext2D): void {
+    const bl = this.airport.buildings;
+    if (!bl || bl.length === 0) return;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    for (const b of bl) {
+      const P = b.pts;
+      const k = P.length / 2;
+      if (k < 3) continue;
+      const X = (i: number) => this.sx(P[(i % k) * 2]!);
+      const Y = (i: number) => this.sy(P[(i % k) * 2 + 1]!);
+      ctx.beginPath();
+      ctx.moveTo((X(0) + X(1)) / 2, (Y(0) + Y(1)) / 2);
+      for (let i = 1; i <= k; i++) ctx.quadraticCurveTo(X(i), Y(i), (X(i) + X(i + 1)) / 2, (Y(i) + Y(i + 1)) / 2);
+      ctx.closePath();
+      ctx.globalAlpha = 0.5;
+      ctx.fillStyle = C.building;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = C.buildingEdge;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+    this.bridges ??= this.computeBridges();
+    ctx.strokeStyle = C.buildingEdge;
+    ctx.lineWidth = Math.max(1.5, 5 * this.scale);
+    for (const j of this.bridges) {
+      ctx.beginPath();
+      ctx.moveTo(this.sx(j.x1), this.sy(j.y1));
+      ctx.lineTo(this.sx(j.x2), this.sy(j.y2));
+      ctx.stroke();
+    }
+    if (this.zoom >= 1.2) {
+      ctx.font = `600 11px ${FONT}`;
+      ctx.fillStyle = C.label;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      for (const b of bl) {
+        if (!b.name) continue;
+        let cx = 0, cy = 0;
+        const k = b.pts.length / 2;
+        for (let i = 0; i < b.pts.length; i += 2) {
+          cx += b.pts[i]!;
+          cy += b.pts[i + 1]!;
+        }
+        ctx.fillText(b.name, this.sx(cx / k), this.sy(cy / k));
+      }
+    }
   }
 
   /** Apron names in the middle of each apron (VABB). */

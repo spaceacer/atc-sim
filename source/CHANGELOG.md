@@ -9,6 +9,16 @@ While the major version is 0, a minor release may also change behaviour that
 saved sessions or trained agents rely on; such changes are listed under
 **Changed**.
 
+## 0.15.0 - 2026-11-14
+
+### Added
+- **Buildings in Mumbai ground mode.** Terminal 1, Terminal 2 (with its piers),
+  the cargo terminal and the other buildings inside the aerodrome are drawn as
+  smooth, soft-filled outlines traced from the AIP tug-release chart, with
+  names on the terminals once zoomed in. Colours follow the theme.
+- **Jet bridges:** a short line from each passenger stand to the nearest
+  building edge (approximate; cargo and GA stands have none).
+
 ## 0.14.0 - 2026-11-14
 
 ### Added
