@@ -9,6 +9,18 @@ While the major version is 0, a minor release may also change behaviour that
 saved sessions or trained agents rely on; such changes are listed under
 **Changed**.
 
+## 0.17.0 - 2026-11-14
+
+### Added
+- **Curved taxi paths (ground mode).** Where a route turns, aircraft now follow a
+  curve (up to 60 m before and after the node) instead of a sharp corner, and
+  the taxiways are drawn with the same curves, including flared junctions.
+  Runways, stands and holding positions stay straight.
+
+### Fixed
+- Mumbai: the east end of taxiway N1 and the N1R connector at the runway 27
+  end now follow the chart (N1 curves down at the runway end).
+
 ## 0.16.0 - 2026-11-14
 
 ### Added

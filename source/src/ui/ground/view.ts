@@ -2,6 +2,7 @@
 // canvas, aircraft as oriented silhouettes with labels, the selected
 // aircraft's cleared route and the route being built.
 
+import { cornerCut } from '../../engine/ground/curve.js';
 import type { GroundAircraft, GroundAirport, GroundState } from '../../engine/ground/types.js';
 import type { TaxiGraph } from '../../engine/ground/graph.js';
 import { placeLabel } from '../../engine/ground/simulation.js';
@@ -238,12 +239,69 @@ export class GroundView {
     // is a taxiway here too (the runway itself is drawn over it below).
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    for (const e of g.edges) {
-      if (e.kind === 'runway') continue;
+    // Corners: a node with exactly two taxi edges that turns gets a curve (the same cut the
+    // aircraft follow, see engine/ground/curve.ts); its two edges are shortened to meet it.
+    const taxi = g.edges.filter((e) => e.kind !== 'runway' && e.kind !== 'stand');
+    const adj = new Map<string, string[]>();
+    for (const e of taxi) {
+      (adj.get(e.a) ?? adj.set(e.a, []).get(e.a)!).push(e.b);
+      (adj.get(e.b) ?? adj.set(e.b, []).get(e.b)!).push(e.a);
+    }
+    const cut = new Map<string, number>(); // `${node}|${neighbour}` -> metres trimmed from that end
+    const corners: { id: string; p: string; q: string; d: number; kind: string }[] = [];
+    for (const [id, nb] of adj) {
+      const n = g.node(id);
+      if (n.onRunway || g.isStand(id)) continue;
+      for (let i = 0; i < nb.length; i++) {
+        for (let j = i + 1; j < nb.length; j++) {
+          const d = cornerCut(g.node(nb[i]!), n, g.node(nb[j]!));
+          if (d <= 0) continue;
+          if (nb.length === 2) {
+            cut.set(`${id}|${nb[i]}`, d); // a plain bend: the straight edges stop where the curve starts
+            cut.set(`${id}|${nb[j]}`, d);
+          }
+          const k = taxi.find((e) => (e.a === id && e.b === nb[i]) || (e.b === id && e.a === nb[i]))?.kind ?? 'taxiway';
+          corners.push({ id, p: nb[i]!, q: nb[j]!, d, kind: k });
+        }
+      }
+    }
+    const width = (kind: string) => Math.max(2, (kind === 'taxilane' ? 40 : TAXI_WIDTH_M) * this.scale);
+    const colour = (kind: string) => (kind === 'taxilane' ? C.apron : C.pavement);
+    for (const e of taxi) {
       const p = g.node(e.a);
       const q = g.node(e.b);
-      ctx.strokeStyle = e.kind === 'taxilane' || e.kind === 'stand' ? C.apron : C.pavement;
-      ctx.lineWidth = Math.max(2, (e.kind === 'taxilane' ? 40 : e.kind === 'stand' ? 30 : TAXI_WIDTH_M) * this.scale);
+      const len = Math.hypot(q.x - p.x, q.y - p.y) || 1;
+      const ux = (q.x - p.x) / len;
+      const uy = (q.y - p.y) / len;
+      const t0 = cut.get(`${e.a}|${e.b}`) ?? 0;
+      const t1 = cut.get(`${e.b}|${e.a}`) ?? 0;
+      ctx.strokeStyle = colour(e.kind);
+      ctx.lineWidth = width(e.kind);
+      ctx.beginPath();
+      ctx.moveTo(this.sx(p.x + ux * t0), this.sy(p.y + uy * t0));
+      ctx.lineTo(this.sx(q.x - ux * t1), this.sy(q.y - uy * t1));
+      ctx.stroke();
+    }
+    for (const c of corners) {
+      const n = g.node(c.id);
+      const P = g.node(c.p);
+      const Q = g.node(c.q);
+      const lp = Math.hypot(P.x - n.x, P.y - n.y) || 1;
+      const lq = Math.hypot(Q.x - n.x, Q.y - n.y) || 1;
+      ctx.strokeStyle = colour(c.kind);
+      ctx.lineWidth = width(c.kind);
+      ctx.beginPath();
+      ctx.moveTo(this.sx(n.x + ((P.x - n.x) / lp) * c.d), this.sy(n.y + ((P.y - n.y) / lp) * c.d));
+      ctx.quadraticCurveTo(this.sx(n.x), this.sy(n.y), this.sx(n.x + ((Q.x - n.x) / lq) * c.d), this.sy(n.y + ((Q.y - n.y) / lq) * c.d));
+      ctx.stroke();
+    }
+
+    for (const e of g.edges) {
+      if (e.kind !== 'stand') continue;
+      const p = g.node(e.a);
+      const q = g.node(e.b);
+      ctx.strokeStyle = C.apron;
+      ctx.lineWidth = Math.max(2, 30 * this.scale);
       ctx.beginPath();
       ctx.moveTo(this.sx(p.x), this.sy(p.y));
       ctx.lineTo(this.sx(q.x), this.sy(q.y));

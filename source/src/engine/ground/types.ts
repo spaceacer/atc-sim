@@ -111,6 +111,8 @@ export interface GroundAircraft {
   /** Graph position: last node passed, the node being taxied to, and metres from `node`. */
   node: string | null;
   next: string | null;
+  /** The node it came from (to round the corner it is taking). */
+  prev?: string | null;
   progress: number;
   /** Cleared route after `next`. */
   route: string[];

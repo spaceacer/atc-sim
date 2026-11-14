@@ -15,6 +15,7 @@
 // Pilots keep their distance from traffic ahead going the same way, but they do
 // not resolve head-on or intersection conflicts: that is the controller's job.
 
+import { edgePoint } from './curve.js';
 import type { WeightCategory, Wind } from '../types.js';
 import { TYPE_DATA, performanceOf, takeoffRunNeeded, type TypeData } from '../aircraft/performance.js';
 import { departureWakeSec, wakeRank } from '../rules/wake.js';
@@ -483,6 +484,7 @@ export class GroundSimulation {
   /** The aircraft reached `next`. */
   private arrive(ac: GroundAircraft, tick: number): void {
     const prev = ac.node;
+    ac.prev = prev;
     ac.node = ac.next;
     ac.progress = 0;
     const here = this.graph.node(ac.node!);
@@ -1155,11 +1157,17 @@ export class GroundSimulation {
       return;
     }
     const b = this.graph.node(ac.next);
-    const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
-    const f = Math.min(1, ac.progress / len);
-    ac.x = a.x + (b.x - a.x) * f;
-    ac.y = a.y + (b.y - a.y) * f;
-    ac.heading = bearing(a, b);
+    // Round the corners where the route turns, except on runways, stands and a stop at a node.
+    const flat = (n: { onRunway?: boolean }) => n.onRunway === true;
+    const prevId = ac.prev && this.graph.link(ac.prev, ac.node) ? ac.prev : null;
+    const prevN = prevId && !flat(a) && !this.graph.isStand(prevId) ? this.graph.node(prevId) : null;
+    const nextId = ac.route[0];
+    const nextN = nextId && !flat(b) && !flat(this.graph.node(nextId)) && !this.graph.isStand(ac.next) ? this.graph.node(nextId) : null;
+    const lane = flat(a) || flat(b) || this.graph.isStand(ac.node) || this.graph.isStand(ac.next);
+    const q = edgePoint(lane ? null : prevN, a, b, lane ? null : nextN, ac.progress);
+    ac.x = q.x;
+    ac.y = q.y;
+    ac.heading = q.heading;
   }
 
   private routeNames(route: readonly string[]): string[] {
