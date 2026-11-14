@@ -310,12 +310,15 @@ export class GroundView {
 
     this.drawBuildings(ctx);
 
+    this.drawRunwayMarks(ctx);
+
     // Runways: all runway pavement, the one in use brighter.
     const inUse = a.runways.find((r) => r.id === this.runway)?.name;
     const rw = Math.max(4, a.runwayWidth * this.scale);
     ctx.lineCap = 'butt';
+    const drawn = new Set((a.runwayMarks ?? []).map((r) => r.name));
     for (const e of a.edges) {
-      if (e.kind !== 'runway') continue;
+      if (e.kind !== 'runway' || (e.rwy && drawn.has(e.rwy))) continue;
       const p = g.node(e.a);
       const q = g.node(e.b);
       ctx.strokeStyle = C.runway;
@@ -329,7 +332,7 @@ export class GroundView {
     ctx.strokeStyle = C.centre;
     ctx.lineWidth = 1;
     for (const e of a.edges) {
-      if (e.kind !== 'runway') continue;
+      if (e.kind !== 'runway' || (e.rwy && drawn.has(e.rwy))) continue;
       const p = g.node(e.a);
       const q = g.node(e.b);
       ctx.beginPath();
@@ -479,6 +482,77 @@ export class GroundView {
     ctx.textAlign = 'center';
   }
 
+
+
+  /** Runways drawn from survey data: shoulders, pavement, edge lines and every painted marking. */
+  private drawRunwayMarks(ctx: CanvasRenderingContext2D): void {
+    const list = this.airport.runwayMarks ?? [];
+    const corners = (r: (typeof list)[number], half: number) => {
+      const nx = -r.uy;
+      const ny = r.ux;
+      const at = (s: number, t: number) => ({ x: this.sx(r.ox + r.ux * s + nx * t), y: this.sy(r.oy + r.uy * s + ny * t) });
+      return [at(0, half), at(r.length, half), at(r.length, -half), at(0, -half)];
+    };
+    const band = (r: (typeof list)[number], half: number, colour: string) => {
+      const c = corners(r, half);
+      ctx.fillStyle = colour;
+      ctx.beginPath();
+      ctx.moveTo(c[0]!.x, c[0]!.y);
+      for (let i = 1; i < 4; i++) ctx.lineTo(c[i]!.x, c[i]!.y);
+      ctx.closePath();
+      ctx.fill();
+    };
+    for (const r of list) band(r, r.width / 2 + r.shoulder, C.apron);
+    for (const r of list) band(r, r.width / 2, C.runway);
+    ctx.globalAlpha = 0.85;
+    for (const r of list) {
+      const nx = -r.uy;
+      const ny = r.ux;
+      const at = (s: number, t: number) => ({ x: this.sx(r.ox + r.ux * s + nx * t), y: this.sy(r.oy + r.uy * s + ny * t) });
+      // Edge lines stop where another runway crosses.
+      ctx.strokeStyle = C.centre;
+      ctx.lineWidth = Math.max(1, 0.45 * this.scale);
+      for (const sign of [1, -1]) {
+        const t = sign * (r.width / 2 - 0.9);
+        let spans: [number, number][] = [[0, r.length]];
+        for (const o of list) {
+          if (o === r) continue;
+          // Lateral offset from `o` of the point at s on this edge: d0 + k s.
+          const px = r.ox + nx * t - o.ox;
+          const py = r.oy + ny * t - o.oy;
+          const d0 = px * -o.uy + py * o.ux;
+          const k = r.ux * -o.uy + r.uy * o.ux;
+          if (Math.abs(k) < 1e-9) continue;
+          const lim = o.width / 2 + 2;
+          const s1 = (-lim - d0) / k;
+          const s2 = (lim - d0) / k;
+          const lo = Math.min(s1, s2);
+          const hi = Math.max(s1, s2);
+          spans = spans.flatMap(([a0, a1]) => (hi <= a0 || lo >= a1 ? [[a0, a1] as [number, number]] : [[a0, Math.min(a1, lo)], [Math.max(a0, hi), a1]].filter(([x, y]) => y > x) as [number, number][]));
+        }
+        for (const [a0, a1] of spans) {
+          const p0 = at(a0, t);
+          const p1 = at(a1, t);
+          ctx.beginPath();
+          ctx.moveTo(p0.x, p0.y);
+          ctx.lineTo(p1.x, p1.y);
+          ctx.stroke();
+        }
+      }
+      ctx.fillStyle = C.centre;
+      for (const poly of r.polys) {
+        ctx.beginPath();
+        for (let i = 0; i < poly.length; i += 2) {
+          const q = at(poly[i]!, poly[i + 1]!);
+          if (i === 0) ctx.moveTo(q.x, q.y);
+          else ctx.lineTo(q.x, q.y);
+        }
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
 
   /** Jet bridges, computed once: a short line from each passenger stand to the nearest building edge. */
   private bridges: { x1: number; y1: number; x2: number; y2: number }[] | null = null;

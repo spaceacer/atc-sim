@@ -14,6 +14,7 @@
 // Coordinates below are chart points (1 pt = 1/72 in on the A2 TRP chart, y down);
 // `m()` converts to metres, +x east, +y north, origin at the middle of runway 09/27.
 
+import { VABB_RUNWAY_MARKS } from './vabbRunwayMarks.js';
 import { VABB_BUILDINGS } from './vabbBuildings.js';
 import type { GEdge, GNode, GroundAirport, GroundRunwayEnd, Stand } from '../../engine/ground/types.js';
 
@@ -386,8 +387,9 @@ const along = (x0: number, y0: number, x1: number, y1: number, metres: number) =
   return [x0 + ((x1 - x0) / L) * metres * PT_PER_M, y0 + ((y1 - y0) / L) * metres * PT_PER_M] as Pt;
 };
 
+// Thresholds are displaced: 09 by 140 m, 27 by 483 m (AIP AD 2.13: TORA 3448 m, LDA 2965 m).
 const t09 = thr(...along(69, 702, 1369, 702, 140));
-const t27 = thr(...along(1369, 702, 69, 702, 223));
+const t27 = thr(...along(1369, 702, 69, 702, 483));
 const t14 = thr(...along(447, 286, 1215, 1054, 400));
 const t32 = thr(...along(1215, 1054, 447, 286, 198));
 const end09 = thr(...along(69, 702, 1369, 702, 3188));
@@ -401,6 +403,13 @@ const runways: GroundRunwayEnd[] = [
   { id: '14', name: '14/32', heading: 135, thresholdX: t14.x, thresholdY: t14.y, endX: end14.x, endY: end14.y, holdingPoint: 'E10h', lineupNode: 'R14.0', oppositeId: '32', takeoffFactor: 0.9 },
   { id: '32', name: '14/32', heading: 315, thresholdX: t32.x, thresholdY: t32.y, endX: end32.x, endY: end32.y, holdingPoint: 'W1h', lineupNode: 'R14@1202,1041', oppositeId: '14', takeoffFactor: 0.9 },
 ];
+
+function drawing(name: string, p0: Pt, p1: Pt, width: number, shoulder: number) {
+  const a = m(p0[0], p0[1]);
+  const b = m(p1[0], p1[1]);
+  const length = Math.hypot(b.x - a.x, b.y - a.y);
+  return { name, ox: a.x, oy: a.y, ux: (b.x - a.x) / length, uy: (b.y - a.y) / length, length, width, shoulder, polys: VABB_RUNWAY_MARKS[name]! };
+}
 
 export const VABB: GroundAirport = {
   icao: 'VABB',
@@ -421,6 +430,8 @@ export const VABB: GroundAirport = {
   cargoFleet: { B77W: 3, A333: 2, B738: 2, AT76: 1 },
   standFleets,
   buildings: VABB_BUILDINGS,
+  // 09/27: 60 m wide, 7.5 m shoulders; 14/32: 45 m wide, 15 m shoulders (AIP AD 2.12).
+  runwayMarks: [drawing('09/27', [69, 702], [1369, 702], 60, 7.5), drawing('14/32', [447, 286], [1215, 1054], 45, 15)],
 };
 
 /** Debug: the graph in chart points for the overlay check. */

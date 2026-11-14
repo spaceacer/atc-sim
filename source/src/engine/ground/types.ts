@@ -57,6 +57,21 @@ export interface GroundRunwayEnd {
   takeoffFactor?: number;
 }
 
+/** A runway drawn from survey data: pavement, shoulders and markings in runway-local metres. */
+export interface RunwayDrawing {
+  name: string; // "09/27"
+  /** Where it starts (x, y in ground metres), its unit direction and its length. */
+  ox: number;
+  oy: number;
+  ux: number;
+  uy: number;
+  length: number;
+  width: number;
+  shoulder: number;
+  /** Marking polygons: flat s (along), t (across, left positive) in metres. */
+  polys: number[][];
+}
+
 export interface GroundAirport {
   icao: string;
   name: string;
@@ -78,6 +93,8 @@ export interface GroundAirport {
   cargoFleet?: Record<string, number>;
   /** Types that use particular stands (instead of the airport fleet). */
   standFleets?: Record<string, Record<string, number>>;
+  /** Detailed runway drawing (pavement, shoulders, markings), per physical runway. */
+  runwayMarks?: RunwayDrawing[];
   /** Building outlines to draw (closed polygons, flat x, y in metres). */
   buildings?: { name?: string; pts: number[] }[];
 }

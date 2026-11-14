@@ -189,3 +189,17 @@ test('every stand can push back facing somewhere, and sits clear of its push nod
     assert.ok(Math.hypot(a.x - b.x, a.y - b.y) >= 15, `${s.id} is on top of its push node`);
   }
 });
+
+test('landing distances (threshold to the end of the run) match the AIP (AD 2.13), within 12 m', () => {
+  const lda = { '09': 3048, '27': 2965, '14': 2471, '32': 2673 } as const;
+  for (const r of VABB.runways) {
+    const d = Math.hypot((r.endX ?? 0) - r.thresholdX, (r.endY ?? 0) - r.thresholdY);
+    assert.ok(Math.abs(d - lda[r.id as keyof typeof lda]) <= 12, `${r.id}: ${Math.round(d)} m, AIP ${lda[r.id as keyof typeof lda]} m`);
+  }
+});
+
+test('runways are drawn with the AIP widths and shoulders', () => {
+  const w = Object.fromEntries((VABB.runwayMarks ?? []).map((r) => [r.name, [r.width, r.shoulder]]));
+  assert.deepEqual(w, { '09/27': [60, 7.5], '14/32': [45, 15] });
+  for (const r of VABB.runwayMarks ?? []) assert.ok(r.polys.length > 100, `${r.name} has its markings`);
+});

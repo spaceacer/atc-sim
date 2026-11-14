@@ -9,6 +9,19 @@ While the major version is 0, a minor release may also change behaviour that
 saved sessions or trained agents rely on; such changes are listed under
 **Changed**.
 
+## 0.18.0 - 2026-11-14
+
+### Changed
+- **Mumbai runways redrawn from the AIP and chart.** 09/27 is 60 m wide with 7.5 m
+  shoulders and 14/32 is 45 m wide with 15 m shoulders (AD 2.12). Every painted
+  marking on both runways is traced from the tug-release chart: threshold stripes,
+  designators, touchdown-zone and aiming-point blocks, centreline dashes,
+  displaced-threshold arrows and pavement joints, with edge lines that stop at
+  the crossing.
+- **Runway 27's displaced threshold was wrong:** it sat 223 m from the pavement end
+  and is now 483 m (TORA 3448 m, LDA 2965 m, AD 2.13). Landing distances for all
+  four ends now match the AIP within 12 m (checked by a test).
+
 ## 0.17.1 - 2026-11-14
 
 ### Changed
