@@ -3,7 +3,7 @@
 A browser-based air traffic control game inspired by ATC-SIM, built on
 simulation engines that run identically in the browser and headless in Node.
 Two modes: **Approach radar** (vector, sequence and clear arrivals and
-departures) and **Ground** (push back, taxi and hold aircraft on a practice
+departures) and **Ground** (push back, taxi and hold aircraft at Mumbai or on a practice
 airport while the tower and the airborne traffic run automatically).
 
 **Version 0.14.0.** The project follows Semantic Versioning (`MAJOR.MINOR.PATCH`);
