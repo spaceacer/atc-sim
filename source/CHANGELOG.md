@@ -9,6 +9,12 @@ While the major version is 0, a minor release may also change behaviour that
 saved sessions or trained agents rely on; such changes are listed under
 **Changed**.
 
+## 0.17.1 - 2026-11-14
+
+### Changed
+- The yellow taxi centrelines curve like the pavement and the paths aircraft
+  follow: bends are rounded, and lead-in lines curve into each junction.
+
 ## 0.17.0 - 2026-11-14
 
 ### Added

@@ -361,9 +361,25 @@ export class GroundView {
       if (e.kind === 'runway' || e.rwy) continue;
       const p = g.node(e.a);
       const q = g.node(e.b);
+      const len = Math.hypot(q.x - p.x, q.y - p.y) || 1;
+      const ux = (q.x - p.x) / len;
+      const uy = (q.y - p.y) / len;
+      const t0 = cut.get(`${e.a}|${e.b}`) ?? 0;
+      const t1 = cut.get(`${e.b}|${e.a}`) ?? 0;
       ctx.beginPath();
-      ctx.moveTo(this.sx(p.x), this.sy(p.y));
-      ctx.lineTo(this.sx(q.x), this.sy(q.y));
+      ctx.moveTo(this.sx(p.x + ux * t0), this.sy(p.y + uy * t0));
+      ctx.lineTo(this.sx(q.x - ux * t1), this.sy(q.y - uy * t1));
+      ctx.stroke();
+    }
+    for (const c of corners) {
+      const n = g.node(c.id);
+      const P = g.node(c.p);
+      const Q = g.node(c.q);
+      const lp = Math.hypot(P.x - n.x, P.y - n.y) || 1;
+      const lq = Math.hypot(Q.x - n.x, Q.y - n.y) || 1;
+      ctx.beginPath();
+      ctx.moveTo(this.sx(n.x + ((P.x - n.x) / lp) * c.d), this.sy(n.y + ((P.y - n.y) / lp) * c.d));
+      ctx.quadraticCurveTo(this.sx(n.x), this.sy(n.y), this.sx(n.x + ((Q.x - n.x) / lq) * c.d), this.sy(n.y + ((Q.y - n.y) / lq) * c.d));
       ctx.stroke();
     }
     ctx.globalAlpha = 1;
