@@ -249,6 +249,14 @@ function specFor(id: ThemeId): Spec {
 }
 
 /** Black or white overlay colour with the theme's scope colour and the given alpha. */
+/** Blend `a` toward `b` by `k` (0..1); both #rrggbb. */
+function mixHex(a: string, b: string, k: number): string {
+  const x = parseInt(a.slice(1), 16);
+  const y = parseInt(b.slice(1), 16);
+  const ch = (s: number) => Math.round(((x >> s) & 255) * (1 - k) + ((y >> s) & 255) * k);
+  return `#${((1 << 24) | (ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).slice(1)}`;
+}
+
 function veil(hex: string, alpha: number): string {
   const n = parseInt(hex.slice(1), 16);
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
@@ -335,6 +343,11 @@ export function applyTheme(id: ThemeId): void {
     scale: t.dim,
     labelBack: veil(t.edge, 0.85),
     labelBackDim: veil(t.scope, 0.7),
+    water: mixHex(t.scope, t.light ? '#7fb2d6' : '#1f7fb5', t.light ? 0.35 : 0.22),
+    land: mixHex(t.scope, t.light ? '#b9cfa6' : '#3a7a4c', t.light ? 0.5 : 0.2),
+    coast: mixHex(t.scope, t.light ? '#4d7a4f' : '#8fd1a0', t.light ? 0.7 : 0.55),
+    groundLine: veil(t.dim, 0.42),
+    groundFill: veil(t.dim, 0.24),
   });
   setGroundPalette({
     bg: t.ground.bg,

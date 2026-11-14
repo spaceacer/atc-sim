@@ -443,11 +443,31 @@ export class GroundView {
       const P = b.pts;
       const k = P.length / 2;
       if (k < 3) continue;
-      const X = (i: number) => this.sx(P[(i % k) * 2]!);
-      const Y = (i: number) => this.sy(P[(i % k) * 2 + 1]!);
+      const px = (i: number) => P[(((i % k) + k) % k) * 2]!;
+      const py = (i: number) => P[(((i % k) + k) % k) * 2 + 1]!;
+      // A vertex is rounded only where the outline really bends: both neighbouring
+      // edges short and the turn gentle. Long edges and sharp corners stay straight.
+      const smooth = (i: number): boolean => {
+        const ax = px(i) - px(i - 1), ay = py(i) - py(i - 1);
+        const bx = px(i + 1) - px(i), by = py(i + 1) - py(i);
+        const la = Math.hypot(ax, ay), lb = Math.hypot(bx, by);
+        if (la > 45 || lb > 45 || la === 0 || lb === 0) return false;
+        const cos = (ax * bx + ay * by) / (la * lb);
+        return cos > 0.75; // turn under about 41 degrees
+      };
+      const X = (i: number) => this.sx(px(i));
+      const Y = (i: number) => this.sy(py(i));
       ctx.beginPath();
       ctx.moveTo((X(0) + X(1)) / 2, (Y(0) + Y(1)) / 2);
-      for (let i = 1; i <= k; i++) ctx.quadraticCurveTo(X(i), Y(i), (X(i) + X(i + 1)) / 2, (Y(i) + Y(i + 1)) / 2);
+      for (let i = 1; i <= k; i++) {
+        const mx = (X(i) + X(i + 1)) / 2;
+        const my = (Y(i) + Y(i + 1)) / 2;
+        if (smooth(i)) ctx.quadraticCurveTo(X(i), Y(i), mx, my);
+        else {
+          ctx.lineTo(X(i), Y(i));
+          ctx.lineTo(mx, my);
+        }
+      }
       ctx.closePath();
       ctx.globalAlpha = 0.5;
       ctx.fillStyle = C.building;

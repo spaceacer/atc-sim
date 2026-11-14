@@ -9,6 +9,20 @@ While the major version is 0, a minor release may also change behaviour that
 saved sessions or trained agents rely on; such changes are listed under
 **Changed**.
 
+## 0.16.0 - 2026-11-14
+
+### Added
+- **Land and water on the approach radar (Mumbai).** The real coastline (Natural
+  Earth 1:10m, public domain) with land and water in different tints and a thin
+  coast line, following the theme.
+- **The airport on the approach radar:** Mumbai's taxiways and buildings drawn
+  faintly under the enlarged runways, laid on the scope from the ground layout.
+
+### Changed
+- Ground-view buildings keep straight edges and sharp corners and are rounded
+  only where the traced outline really bends (the terminal arcs, hangar curves);
+  the outlines are traced in finer detail.
+
 ## 0.15.0 - 2026-11-14
 
 ### Added

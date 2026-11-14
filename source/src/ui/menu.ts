@@ -462,6 +462,7 @@ export class Menu {
       const sim = new Simulation(makeScenario(1, this.map.id));
       const radar = new Radar(this.canvas, a, { ...DEFAULT_DISPLAY, rangeRings: true, fixNames: true, trailColours: false });
       // Every runway's centreline, so the map shows the whole airport.
+      if (this.map.id === 'vabb') radar.setGroundOverlay(groundAirportFor(this.map.id));
       radar.setRunwaysInUse(a.runways.map((r) => r.id));
       radar.render(sim.getState(), new Map(), 1, null, new Map());
     }

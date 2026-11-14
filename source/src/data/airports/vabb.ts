@@ -9,6 +9,7 @@
 // Mumbai; sea fixes and exit fixes are invented placeholders until real
 // SID/STAR data arrives in a later milestone.
 
+import { VABB_LAND } from './vabbLand.js';
 import type { Airport } from '../../engine/types.js';
 import { fixAt, runwayPair, type LatLon } from '../geo.js';
 
@@ -45,6 +46,7 @@ export const VABB: Airport = {
   elevation: 39,
   boundary: { halfWidth: HALF_WIDTH, halfHeight: HALF_HEIGHT },
   displayRunwayWidth: 0.28,
+  land: VABB_LAND,
   runways: [r09, r27, r14, r32],
   preferredRunways: ['27', '09', '32', '14'],
   // Rough share of movements by type at Mumbai (IndiGo and Air India A320/A321 families,

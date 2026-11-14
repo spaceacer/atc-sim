@@ -150,6 +150,8 @@ export interface Airport {
   preferredRunways: string[];
   /** Relative weights of aircraft types (ICAO designators) in traffic; every type equally if absent. */
   fleet?: Record<string, number>;
+  /** Land polygons (flat x, y in nm), drawn on the scope; everything else is water. */
+  land?: number[][];
 }
 
 export interface Wind {

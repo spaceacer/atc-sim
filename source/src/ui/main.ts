@@ -9,6 +9,7 @@ import { Radar, type Prev, type Trail } from './radar.js';
 import { Strips } from './strips.js';
 import { VERSION } from '../version.js';
 import { GroundApp } from './ground/app.js';
+import { groundAirportFor } from '../data/ground/index.js';
 import { Menu, type MenuStart } from './menu.js';
 import { PRESETS, matchPreset } from './presets.js';
 import { applyTheme } from './theme.js';
@@ -68,6 +69,7 @@ buildDialTicks();
 
 let sim = new Simulation(makeScenario(seed, map.id, traffic, weather, options));
 let radar = new Radar(canvas, map.airport, radarDisplayFor(settings));
+if (map.id === 'vabb') radar.setGroundOverlay(groundAirportFor(map.id));
 const strips = new Strips($('arrivals'), $('departures'), $('arr-count'), $('dep-count'), (id) => select(id));
 
 let selectedId: number | null = null;
@@ -756,6 +758,7 @@ function startGame(file?: SessionFile): void {
     sim = new Simulation(makeScenario(seed, map.id, traffic, weather, options));
   }
   radar = new Radar(canvas, map.airport, radarDisplayFor(settings));
+if (map.id === 'vabb') radar.setGroundOverlay(groundAirportFor(map.id));
   selectedId = null;
   prev.clear();
   trails.clear();

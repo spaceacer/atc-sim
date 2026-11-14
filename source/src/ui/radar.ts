@@ -2,12 +2,13 @@
 // The scope is the rectangular airspace boundary, fitted to the canvas.
 
 import type { Aircraft, Airport, Fix, SimState } from '../engine/index.js';
+import type { GroundAirport } from '../engine/ground/types.js';
 import { HOLD_LEG_SEC, MIN_LATERAL_NM, findFix, findRunway, headingVector } from '../engine/index.js';
 
 export type Palette = Record<
   | 'outside' | 'scope' | 'boundary' | 'grid' | 'runway' | 'runwayIdle' | 'centreline' | 'fix' | 'exit' | 'blip'
   | 'dataBlock' | 'departure' | 'cleared' | 'selected' | 'conflict' | 'warning' | 'trail' | 'scale'
-  | 'labelBack' | 'labelBackDim',
+  | 'labelBack' | 'labelBackDim' | 'water' | 'land' | 'coast' | 'groundLine' | 'groundFill',
   string
 >;
 
@@ -33,6 +34,11 @@ export const COLORS: Palette = {
   scale: '#7F98A6',
   labelBack: 'rgba(15, 25, 31, 0.85)',
   labelBackDim: 'rgba(23, 36, 44, 0.7)',
+  water: '#17242C',
+  land: '#17242C',
+  coast: '#3A5262',
+  groundLine: 'rgba(127, 152, 166, 0.28)',
+  groundFill: 'rgba(127, 152, 166, 0.16)',
 };
 
 export function setRadarPalette(p: Palette): void {
@@ -393,6 +399,100 @@ export class Radar {
     return this.cy - y * this.scale;
   }
 
+
+  /** The airport's own taxiways and buildings, faint, under the enlarged runways. */
+  setGroundOverlay(g: GroundAirport | null): void {
+    this.groundOverlay = g;
+    this.overlayXf = null;
+    this.drawStatic();
+  }
+  private groundOverlay: GroundAirport | null = null;
+  private overlayXf: { cos: number; sin: number; ox: number; oy: number } | null = null;
+
+  /** Ground metres to scope nm: the ground chart's 09/27 axis is laid on the scope's. */
+  private groundToNm(x: number, y: number): { x: number; y: number } {
+    if (!this.overlayXf) {
+      const a = findRunway(this.airport, '09');
+      const b = findRunway(this.airport, '27');
+      let rot = 0;
+      let ox = 0;
+      let oy = 0;
+      if (a && b) {
+        rot = (a.heading - 90) * (Math.PI / 180);
+        ox = (a.thresholdX + b.thresholdX) / 2;
+        oy = (a.thresholdY + b.thresholdY) / 2;
+      }
+      // Compass rotation by `rot` (clockwise): x' = x cos + y sin, y' = -x sin + y cos.
+      this.overlayXf = { cos: Math.cos(rot), sin: Math.sin(rot), ox, oy };
+    }
+    const t = this.overlayXf;
+    const nx = (x * t.cos + y * t.sin) / 1852;
+    const ny = (-x * t.sin + y * t.cos) / 1852;
+    return { x: t.ox + nx, y: t.oy + ny };
+  }
+
+  private drawGroundOverlay(ctx: CanvasRenderingContext2D): void {
+    const g = this.groundOverlay;
+    if (!g) return;
+    const node = new Map(g.nodes.map((n) => [n.id, n]));
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    for (const b of g.buildings ?? []) {
+      const k = b.pts.length / 2;
+      if (k < 3) continue;
+      ctx.beginPath();
+      for (let i = 0; i < k; i++) {
+        const p = this.groundToNm(b.pts[i * 2]!, b.pts[i * 2 + 1]!);
+        if (i === 0) ctx.moveTo(this.sx(p.x), this.sy(p.y));
+        else ctx.lineTo(this.sx(p.x), this.sy(p.y));
+      }
+      ctx.closePath();
+      ctx.fillStyle = COLORS.groundFill;
+      ctx.fill();
+    }
+    ctx.strokeStyle = COLORS.groundLine;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (const e of g.edges) {
+      if (e.kind === 'runway' || e.kind === 'stand') continue;
+      const p = node.get(e.a);
+      const q = node.get(e.b);
+      if (!p || !q) continue;
+      const a = this.groundToNm(p.x, p.y);
+      const c = this.groundToNm(q.x, q.y);
+      ctx.moveTo(this.sx(a.x), this.sy(a.y));
+      ctx.lineTo(this.sx(c.x), this.sy(c.y));
+    }
+    ctx.stroke();
+  }
+
+  /** Land (tinted) and coastline, clipped to the airspace; the rest is water. */
+  private drawLand(ctx: CanvasRenderingContext2D, left: number, top: number, width: number, height: number): void {
+    const land = this.airport.land;
+    if (!land) return;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(left, top, width, height);
+    ctx.clip();
+    ctx.lineJoin = 'round';
+    for (const poly of land) {
+      ctx.beginPath();
+      for (let i = 0; i < poly.length; i += 2) {
+        const x = this.sx(poly[i]!);
+        const y = this.sy(poly[i + 1]!);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.fillStyle = COLORS.land;
+      ctx.fill();
+      ctx.strokeStyle = COLORS.coast;
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   // -------------------------------------------------------------------------
   // Static layer: boundary, grid, runways, fixes
 
@@ -411,8 +511,9 @@ export class Radar {
     const top = this.sy(hh);
     const width = 2 * hw * this.scale;
     const height = 2 * hh * this.scale;
-    ctx.fillStyle = COLORS.scope;
+    ctx.fillStyle = this.airport.land ? COLORS.water : COLORS.scope;
     ctx.fillRect(left, top, width, height);
+    this.drawLand(ctx, left, top, width, height);
 
     // 10 nm grid, faint.
     ctx.strokeStyle = COLORS.grid;
@@ -469,6 +570,8 @@ export class Radar {
       }
       ctx.stroke();
     }
+
+    this.drawGroundOverlay(ctx);
 
     // Runways, drawn enlarged as in ATC-SIM, labelled at each end.
     const drawn = new Set<string>();
