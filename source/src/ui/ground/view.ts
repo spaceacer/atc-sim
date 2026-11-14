@@ -493,17 +493,20 @@ export class GroundView {
       const at = (s: number, t: number) => ({ x: this.sx(r.ox + r.ux * s + nx * t), y: this.sy(r.oy + r.uy * s + ny * t) });
       return [at(0, half), at(r.length, half), at(r.length, -half), at(0, -half)];
     };
-    const band = (r: (typeof list)[number], half: number, colour: string) => {
+    const band = (r: (typeof list)[number], half: number, colour: string, round: number) => {
       const c = corners(r, half);
+      const rad = round * this.scale;
       ctx.fillStyle = colour;
       ctx.beginPath();
-      ctx.moveTo(c[0]!.x, c[0]!.y);
-      for (let i = 1; i < 4; i++) ctx.lineTo(c[i]!.x, c[i]!.y);
+      const mid = (a: { x: number; y: number }, b: { x: number; y: number }) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+      const m0 = mid(c[0]!, c[1]!);
+      ctx.moveTo(m0.x, m0.y);
+      for (let i = 1; i <= 4; i++) ctx.arcTo(c[i % 4]!.x, c[i % 4]!.y, c[(i + 1) % 4]!.x, c[(i + 1) % 4]!.y, rad);
       ctx.closePath();
       ctx.fill();
     };
-    for (const r of list) band(r, r.width / 2 + r.shoulder, C.apron);
-    for (const r of list) band(r, r.width / 2, C.runway);
+    for (const r of list) band(r, r.width / 2 + r.shoulder, C.apron, 22);
+    for (const r of list) band(r, r.width / 2, C.runway, 10);
     ctx.globalAlpha = 0.85;
     for (const r of list) {
       const nx = -r.uy;
@@ -514,7 +517,7 @@ export class GroundView {
       ctx.lineWidth = Math.max(1, 0.45 * this.scale);
       for (const sign of [1, -1]) {
         const t = sign * (r.width / 2 - 0.9);
-        let spans: [number, number][] = [[0, r.length]];
+        let spans: [number, number][] = [[6, r.length - 6]];
         for (const o of list) {
           if (o === r) continue;
           // Lateral offset from `o` of the point at s on this edge: d0 + k s.
@@ -550,6 +553,19 @@ export class GroundView {
         ctx.closePath();
         ctx.fill();
       }
+      // Designators: real glyphs, upright for a pilot on the approach (top of the digits pointing away).
+      for (const lb of r.labels) {
+        const d = lb.dir;
+        const o = at(lb.s, 0);
+        ctx.save();
+        ctx.translate(o.x, o.y);
+        ctx.transform(d * r.uy * this.scale, d * r.ux * this.scale, -d * r.ux * this.scale, d * r.uy * this.scale, 0, 0);
+        ctx.font = `700 14px ${FONT}`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillText(lb.text, 0, 0);
+        ctx.restore();
+      }
     }
     ctx.globalAlpha = 1;
   }
@@ -563,7 +579,7 @@ export class GroundView {
     for (const s of this.airport.stands) {
       if (s.cargo || s.id.startsWith('J')) continue;
       const n = this.graph.node(s.id);
-      let best = { d: 80, x: 0, y: 0 };
+      let best = { d: 130, x: 0, y: 0 };
       for (const b of bl) {
         const P = b.pts;
         for (let i = 0; i < P.length; i += 2) {
@@ -576,7 +592,7 @@ export class GroundView {
           if (d < best.d) best = { d, x: qx, y: qy };
         }
       }
-      if (best.d < 80 && best.d > 4) out.push({ x1: n.x, y1: n.y, x2: best.x, y2: best.y });
+      if (best.d < 130 && best.d > 4) out.push({ x1: n.x, y1: n.y, x2: best.x, y2: best.y });
     }
     return out;
   }

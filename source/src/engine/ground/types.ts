@@ -70,6 +70,8 @@ export interface RunwayDrawing {
   shoulder: number;
   /** Marking polygons: flat s (along), t (across, left positive) in metres. */
   polys: number[][];
+  /** Painted designators: baseline at s, read by a pilot flying in direction dir (+1 = increasing s). */
+  labels: { text: string; s: number; dir: 1 | -1 }[];
 }
 
 export interface GroundAirport {

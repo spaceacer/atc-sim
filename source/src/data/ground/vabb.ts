@@ -14,7 +14,7 @@
 // Coordinates below are chart points (1 pt = 1/72 in on the A2 TRP chart, y down);
 // `m()` converts to metres, +x east, +y north, origin at the middle of runway 09/27.
 
-import { VABB_RUNWAY_MARKS } from './vabbRunwayMarks.js';
+import { VABB_RUNWAY_LABELS, VABB_RUNWAY_MARKS } from './vabbRunwayMarks.js';
 import { VABB_BUILDINGS } from './vabbBuildings.js';
 import type { GEdge, GNode, GroundAirport, GroundRunwayEnd, Stand } from '../../engine/ground/types.js';
 
@@ -408,7 +408,7 @@ function drawing(name: string, p0: Pt, p1: Pt, width: number, shoulder: number) 
   const a = m(p0[0], p0[1]);
   const b = m(p1[0], p1[1]);
   const length = Math.hypot(b.x - a.x, b.y - a.y);
-  return { name, ox: a.x, oy: a.y, ux: (b.x - a.x) / length, uy: (b.y - a.y) / length, length, width, shoulder, polys: VABB_RUNWAY_MARKS[name]! };
+  return { name, ox: a.x, oy: a.y, ux: (b.x - a.x) / length, uy: (b.y - a.y) / length, length, width, shoulder, polys: VABB_RUNWAY_MARKS[name]!, labels: VABB_RUNWAY_LABELS[name]! };
 }
 
 export const VABB: GroundAirport = {

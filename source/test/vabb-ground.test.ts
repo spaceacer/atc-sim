@@ -203,3 +203,24 @@ test('runways are drawn with the AIP widths and shoulders', () => {
   assert.deepEqual(w, { '09/27': [60, 7.5], '14/32': [45, 15] });
   for (const r of VABB.runwayMarks ?? []) assert.ok(r.polys.length > 100, `${r.name} has its markings`);
 });
+
+test('runway markings are exact rectangles of standard widths, plus arrows and numbers', () => {
+  const widths = new Set([0.9, 1.8, 8.4, 9]);
+  for (const r of VABB.runwayMarks ?? []) {
+    let rects = 0;
+    for (const p of r.polys) {
+      if (p.length === 14) continue; // displaced-threshold arrow
+      assert.equal(p.length, 8, `${r.name}: a marking is a four-point rectangle`);
+      const ss = [p[0]!, p[2]!, p[4]!, p[6]!];
+      const ts = [p[1]!, p[3]!, p[5]!, p[7]!];
+      assert.ok(p[0] === p[6] && p[2] === p[4] && p[1] === p[3] && p[5] === p[7], `${r.name}: axis-aligned`);
+      const w = Math.round((Math.max(...ts) - Math.min(...ts)) * 10) / 10;
+      const l = Math.max(...ss) - Math.min(...ss);
+      // Stripes, bars, blocks and dashes have a standard width; the full-width threshold bar is wider.
+      assert.ok(widths.has(w) || w >= 40 || l <= 3.01, `${r.name}: width ${w} m`);
+      rects++;
+    }
+    assert.ok(rects > 80, `${r.name} has its markings`);
+    assert.deepEqual(r.labels.map((l) => l.text), r.name.split('/'));
+  }
+});

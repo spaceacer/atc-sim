@@ -9,6 +9,20 @@ While the major version is 0, a minor release may also change behaviour that
 saved sessions or trained agents rely on; such changes are listed under
 **Changed**.
 
+## 0.18.1 - 2026-11-14
+
+### Changed
+- Runway markings are now exact rectangles of standard widths (1.8 m stripes and bars,
+  0.9 m centreline dashes, 9 m aiming blocks), laid out symmetrically about the centreline
+  to the ICAO pattern and placed from the chart. The designators 09, 27, 14 and 32 are real
+  glyphs, and the displaced-threshold arrows are clean arrow shapes.
+- The runway-end backgrounds (shoulder and pavement) have rounded corners instead of sharp
+  right angles.
+
+### Fixed
+- Jet bridges were missing at stands more than 80 m from a terminal outline (most of Apron V);
+  they now reach out to 130 m.
+
 ## 0.18.0 - 2026-11-14
 
 ### Changed
