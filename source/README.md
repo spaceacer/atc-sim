@@ -6,7 +6,7 @@ Two modes: **Approach radar** (vector, sequence and clear arrivals and
 departures) and **Ground** (push back, taxi and hold aircraft at Mumbai or on a practice
 airport while the tower and the airborne traffic run automatically).
 
-**Version 0.18.1.** The project follows Semantic Versioning (`MAJOR.MINOR.PATCH`);
+**Version 0.19.0.** The project follows Semantic Versioning (`MAJOR.MINOR.PATCH`);
 what changed in each release is in [CHANGELOG.md](CHANGELOG.md).
 
 In the approach mode, arrivals enter from any edge of a rectangular airspace at
@@ -22,7 +22,7 @@ and a single-runway practice field.
 ## Play
 
 **No install:** play at <https://spaceacer.github.io/atc-sim/>, or double-click
-`ATC-Sim-0.18.1.html` (everything is inside that one file).
+`ATC-Sim-0.19.0.html` (everything is inside that one file).
 
 The game opens on the **main menu**: pick the airport, the position
 (**Approach radar** or **Ground**, where the airport offers it) and the
@@ -274,6 +274,14 @@ EUROCONTROL Aircraft Performance Database as mirrored by SKYbrary
 [CRJ900 figures](https://www.flyradius.com/bombardier-crj900/performance);
 [Aircraft approach category](https://en.wikipedia.org/wiki/Aircraft_approach_category).
 
+## Usage counting and privacy
+
+The hosted page counts visits and a few events (sessions started and ended, play time and score
+in rough buckets, restart, save, load, theme) with GoatCounter, which sets no cookies and keeps no
+personal data. Nothing is sent from the downloaded `ATC-Sim-<version>.html`, from localhost, or
+when the browser sends Do Not Track. The code is in `src/ui/analytics.ts`; to turn it on, put your
+GoatCounter code in `GOATCOUNTER_CODE` there. The simulation engine never uses it.
+
 ## Sessions and scenarios
 
 **Save session** downloads a JSON file with the map, seed, traffic, weather and
@@ -281,7 +289,7 @@ every command with its tick. **Load saved session or scenario** (main menu) repl
 to the saved moment (paused), reproducing the exact state. A scenario file is the same
 format with no commands; examples are in `scenarios/`. Files record the simulator version that saved them
 (`appVersion`). Saving does not work inside the hosted claude.ai
-page (downloads are blocked there); use `ATC-Sim-0.18.1.html` or `npm run dev`.
+page (downloads are blocked there); use `ATC-Sim-0.19.0.html` or `npm run dev`.
 
 ## Python and AI training
 

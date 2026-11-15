@@ -9,6 +9,17 @@ While the major version is 0, a minor release may also change behaviour that
 saved sessions or trained agents rely on; such changes are listed under
 **Changed**.
 
+## 0.19.0 - 2026-11-15
+
+### Added
+- **Anonymous usage counting** with [GoatCounter](https://www.goatcounter.com) (`src/ui/analytics.ts`).
+  It records page views and a few named events: a session starting and ending (map, position,
+  difficulty, time played and score in buckets), the first separation loss, restart, save, load
+  and theme changes. No cookies, no personal data, no command text and no seeds are sent.
+  It is off until a GoatCounter code is set in `analytics.ts`, and it never runs from
+  `file://`, on localhost, or when the browser sends Do Not Track, so downloaded copies and
+  local development send nothing. The simulation engine does not use it.
+
 ## 0.18.1 - 2026-11-14
 
 ### Changed

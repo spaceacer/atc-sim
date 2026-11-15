@@ -13,6 +13,7 @@ import { groundAirportFor } from '../data/ground/index.js';
 import { Menu, type MenuStart } from './menu.js';
 import { PRESETS, matchPreset } from './presets.js';
 import { applyTheme } from './theme.js';
+import { initAnalytics, minutesBucket, scoreBucket, track } from './analytics.js';
 import {
   beep,
   buildSettingsDialog,
@@ -402,6 +403,10 @@ function handleEvents(events: SimEvent[]): void {
         dropSelectionIfGone();
         break;
       case 'separationLoss':
+        if (!sessionLossReported) {
+          sessionLossReported = true;
+          track(`first-separation-loss/${sessionTag}/${minutesBucket(Date.now() - sessionStartedAt)}`);
+        }
         log(`Separation lost: ${e.a} and ${e.b}, ${e.distance.toFixed(1)} nm, ${Math.round(e.verticalFt)} ft`, 'bad');
         if (settings.sound) beep('loss');
         if (settings.pauseOnLoss) pauseFor('separation loss');
@@ -541,6 +546,32 @@ document.addEventListener('keydown', (ev) => {
 
 let mode: Mode = 'approach';
 let inSession = false;
+
+// Usage counting (analytics.ts): one 'start' and one 'end' event per session, and a few feature events.
+let sessionStartedAt = 0;
+let sessionTag = '';
+let sessionLossReported = false;
+
+function startTracking(choice: MenuStart): void {
+  const d = matchPreset({ traffic: choice.traffic, settings: choice.settings });
+  sessionTag = `${choice.map.id}/${choice.mode}/${d}`;
+  sessionStartedAt = Date.now();
+  sessionLossReported = false;
+  track(`start/${sessionTag}`);
+}
+
+function endTracking(how: 'menu' | 'closed'): void {
+  if (!sessionStartedAt) return;
+  const played = minutesBucket(Date.now() - sessionStartedAt);
+  const score = mode === 'approach' ? `/${scoreBucket(sim.getState().stats.score)}` : '';
+  track(`end/${sessionTag}/${how}/${played}${score}`);
+  sessionStartedAt = 0;
+}
+
+// Closing the tab or navigating away ends the session too (best effort).
+window.addEventListener('pagehide', () => {
+  if (inSession) endTracking('closed');
+});
 let groundApp: GroundApp | null = null;
 const groundInput = $<HTMLInputElement>('g-command');
 const leaveDialog = $<HTMLDialogElement>('leave-dialog');
@@ -586,6 +617,8 @@ function enterSession(choice: MenuStart, file?: SessionFile): void {
   trafficId = choice.traffic;
   menu.hide();
   inSession = true;
+  startTracking(choice);
+  if (file) track('feature/load-session');
   try {
     history.pushState({ atcSession: true }, '', location.href);
   } catch {
@@ -626,6 +659,7 @@ function sessionLabel(choice: MenuStart): void {
 
 function leaveSession(): void {
   if (!inSession) return;
+  endTracking('menu');
   inSession = false;
   setSpeed(0);
   groundApp?.pause();
@@ -699,6 +733,7 @@ function flashScore(box: HTMLElement, kind: 'good' | 'bad'): void {
 }
 
 $('new-game').addEventListener('click', () => {
+  track(`feature/restart/${sessionTag}`);
   seed = newSeed();
   if (trafficId === 'custom') trafficId = 'normal';
   startGame();
@@ -709,6 +744,7 @@ buildSettingsDialog(
   settingsDialog,
   () => settings,
   (next) => {
+    if (next.theme !== settings.theme) track(`setting/theme-${next.theme}`);
     settings = next;
     applyTheme(settings.theme);
     lastQuickKey = '';
@@ -728,6 +764,7 @@ for (const id of ['settings', 'g-settings']) {
 $('save').addEventListener('click', saveSession);
 
 function saveSession(): void {
+  track('feature/save-session');
   const file = sessionFromSim(sim, map.id);
   const blob = new Blob([JSON.stringify(file, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
@@ -820,5 +857,6 @@ const menu = new Menu({
   initial: { map: params.get('map'), mode: params.get('mode'), traffic: params.get('traffic') },
 });
 
+initAnalytics();
 requestAnimationFrame(frame);
 menu.show();
