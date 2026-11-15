@@ -6,7 +6,7 @@
 // To turn it on, create a free GoatCounter site and put its code below (the "xyz" in
 // xyz.goatcounter.com). While the code is empty, nothing is loaded and nothing is sent.
 
-const GOATCOUNTER_CODE = '';
+const GOATCOUNTER_CODE = 'atcsim';
 
 const COUNT_SCRIPT = 'https://gc.zgo.at/count.js';
 
